@@ -169,14 +169,14 @@ class Home {
             })
 
             launch.on('patch', patch => {
-                info.innerHTML = `Patch en cours...`
+                info.innerHTML = `Remplissage des mers...`
             });
 
             launch.on('data', (e) => {
                 new logger('Minecraft', '#36b030');
                 if (launcherSettings.launcher.close === 'close-launcher') ipcRenderer.send("main-window-hide");
                 progressBar.style.display = "none"
-                info.innerHTML = `Demarrage en cours...`
+                info.innerHTML = `Production du grog...`
                 console.log(e);
             })
 
@@ -185,7 +185,7 @@ class Home {
                 progressBar.style.display = "none"
                 info.style.display = "none"
                 playBtn.style.display = "block"
-                info.innerHTML = `Vérification`
+                info.innerHTML = `Nettoyage des canons...`
                 new logger('Launcher', '#7289da');
                 console.log('Close');
             });
