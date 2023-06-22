@@ -5,7 +5,7 @@
     "description": "Launcher officiel du serveur Minecraft RPG The Fortress Of Thieves.",
     "main": "src/app.js",
     "author": "Luuxis, Watherfoxx",
-    "url": "https://thefortressofthieves.fr/public/storage/launcher-v2/",
+    "url": "http://51.254.99.22/public/storage/launcher-v2/",
     "engines": {
         "node": "^18.x.x"
     },
@@ -28,7 +28,7 @@
         "electron": "^20.0.0",
         "electron-builder": "^23.0.3",
         "nodemon": "^2.0.16"
-    },
+    },  
     "repository": {
         "type": "git",
         "url": "git+https://github.com/Watherfoxx/TheFortressOfThievesLauncher.git"
