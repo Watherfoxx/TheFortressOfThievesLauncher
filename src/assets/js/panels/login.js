@@ -19,8 +19,8 @@ class Login {
     }
 
     getOnline() {
-        console.log(`Initializing microsoft Panel...`)
-        console.log(`Initializing mojang Panel...`)
+        console.log(`Initializing Microsoft Panel...`)
+        console.log(`Initializing Mojang Panel...`)
         this.loginMicrosoft();
         this.loginMojang();
         document.querySelector('.cancel-login').addEventListener("click", () => {
@@ -30,9 +30,9 @@ class Login {
     }
 
     getOffline() {
-        console.log(`Initializing microsoft Panel...`)
-        console.log(`Initializing mojang Panel...`)
-        console.log(`Initializing offline Panel...`)
+        console.log(`Initializing Microsoft Panel...`)
+        console.log(`Initializing Mojang Panel...`)
+        console.log(`Initializing Offline Panel...`)
         this.loginMicrosoft();
         this.loginOffline();
         document.querySelector('.cancel-login').addEventListener("click", () => {
@@ -91,14 +91,12 @@ class Login {
                 microsoftBtn.disabled = false;
                 mojangBtn.disabled = false;
                 cancelBtn.disabled = false;
-
             });
         })
     }
 
     async loginMojang() {
         let mailInput = document.querySelector('.Mail')
-        let passwordInput = document.querySelector('.Password')
         let cancelMojangBtn = document.querySelector('.cancel-mojang')
         let infoLogin = document.querySelector('.info-login')
         let loginBtn = document.querySelector(".login-btn")
@@ -118,36 +116,23 @@ class Login {
             cancelMojangBtn.disabled = true;
             loginBtn.disabled = true;
             mailInput.disabled = true;
-            passwordInput.disabled = true;
             infoLogin.innerHTML = "Connexion en cours...";
-
 
             if (mailInput.value == "") {
                 infoLogin.innerHTML = "Entrez votre adresse email / Nom d'utilisateur"
                 cancelMojangBtn.disabled = false;
                 loginBtn.disabled = false;
                 mailInput.disabled = false;
-                passwordInput.disabled = false;
                 return
             }
 
-            if (passwordInput.value == "") {
-                infoLogin.innerHTML = "Entrez votre mot de passe"
-                cancelMojangBtn.disabled = false;
-                loginBtn.disabled = false;
-                mailInput.disabled = false;
-                passwordInput.disabled = false;
-                return
-            }
-
-            let account_connect = await Mojang.login(mailInput.value, passwordInput.value)
+            let account_connect = await Mojang.login(mailInput.value, "")
 
             if (account_connect == null || account_connect.error) {
                 console.log(err)
                 cancelMojangBtn.disabled = false;
                 loginBtn.disabled = false;
                 mailInput.disabled = false;
-                passwordInput.disabled = false;
                 infoLogin.innerHTML = 'Adresse E-mail ou mot de passe invalide'
                 return
             }
@@ -176,7 +161,6 @@ class Login {
             mailInput.value = "";
             loginBtn.disabled = false;
             mailInput.disabled = false;
-            passwordInput.disabled = false;
             loginBtn.style.display = "block";
             infoLogin.innerHTML = "&nbsp;";
         })
@@ -184,13 +168,12 @@ class Login {
 
     async loginOffline() {
         let mailInput = document.querySelector('.Mail')
-        let passwordInput = document.querySelector('.Password')
         let cancelMojangBtn = document.querySelector('.cancel-mojang')
         let infoLogin = document.querySelector('.info-login')
         let loginBtn = document.querySelector(".login-btn")
         let mojangBtn = document.querySelector('.mojang')
 
-        mojangBtn.innerHTML = "Offline"
+        mojangBtn.innerHTML = "Compte cracké"
 
         mojangBtn.addEventListener("click", () => {
             document.querySelector(".login-card").style.display = "none";
@@ -206,36 +189,23 @@ class Login {
             cancelMojangBtn.disabled = true;
             loginBtn.disabled = true;
             mailInput.disabled = true;
-            passwordInput.disabled = true;
             infoLogin.innerHTML = "Connexion en cours...";
-
 
             if (mailInput.value == "") {
                 infoLogin.innerHTML = "Entrez votre adresse email / Nom d'utilisateur"
                 cancelMojangBtn.disabled = false;
                 loginBtn.disabled = false;
                 mailInput.disabled = false;
-                passwordInput.disabled = false;
                 return
             }
 
-            if (mailInput.value.length < 3) {
-                infoLogin.innerHTML = "Votre nom d'utilisateur doit avoir au moins 3 caractères"
-                cancelMojangBtn.disabled = false;
-                loginBtn.disabled = false;
-                mailInput.disabled = false;
-                passwordInput.disabled = false;
-                return
-            }
-
-            let account_connect = await Mojang.login(mailInput.value, passwordInput.value)
+            let account_connect = await Mojang.login(mailInput.value, "")
 
             if (account_connect == null || account_connect.error) {
                 console.log(err)
                 cancelMojangBtn.disabled = false;
                 loginBtn.disabled = false;
                 mailInput.disabled = false;
-                passwordInput.disabled = false;
                 infoLogin.innerHTML = 'Adresse E-mail ou mot de passe invalide'
                 return
             }
@@ -264,7 +234,6 @@ class Login {
             mailInput.value = "";
             loginBtn.disabled = false;
             mailInput.disabled = false;
-            passwordInput.disabled = false;
             loginBtn.style.display = "block";
             infoLogin.innerHTML = "&nbsp;";
         })
