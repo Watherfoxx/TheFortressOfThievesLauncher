@@ -102,17 +102,11 @@ class Launcher {
                         name: refresh.name,
                         refresh_token: refresh.refresh_token,
                         user_properties: refresh.user_properties,
-                        meta: {
-                            type: refresh.meta.type,
-                            xuid: refresh.meta.xuid,
-                            demo: refresh.meta.demo
-                        }
+                        meta: refresh.meta
                     }
 
                     refresh_profile = {
-                        uuid: refresh.uuid,
-                        skins: refresh.profile.skins || [],
-                        capes: refresh.profile.capes || [],
+                        uuid: refresh.uuid
                     }
 
                     this.database.update(refresh_accounts, 'accounts');
@@ -166,6 +160,11 @@ class Launcher {
                     if (account.uuid === selectaccount) this.database.update({ uuid: "1234" }, 'accounts-selected')
                 }
             }
+
+
+
+
+            
             if (!(await this.database.get('1234', 'accounts-selected')).value.selected) {
                 let uuid = (await this.database.getAll('accounts'))[0]?.value?.uuid
                 if (uuid) {

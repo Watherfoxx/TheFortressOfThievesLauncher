@@ -170,7 +170,7 @@ class Home {
 
             launch.on('patch', patch => {
                 console.log(patch);
-                info.innerHTML = `Remplissage des mers...`
+                info.innerHTML = `Patch en cours...`
             });
 
             launch.on('data', (e) => {
@@ -178,7 +178,7 @@ class Home {
                 if (launcherSettings.launcher.close === 'close-launcher') ipcRenderer.send("main-window-hide");
                 ipcRenderer.send('main-window-progress-reset')
                 progressBar.style.display = "none"
-                info.innerHTML = `Production du grog...`
+                info.innerHTML = `Demarrage en cours...`
                 console.log(e);
             })
 
@@ -187,7 +187,7 @@ class Home {
                 progressBar.style.display = "none"
                 info.style.display = "none"
                 playBtn.style.display = "block"
-                info.innerHTML = `Nettoyage du pont...`
+                info.innerHTML = `Vérification`
                 new logger('Launcher', '#7289da');
                 console.log('Close');
             });

@@ -15,25 +15,22 @@
 
 ---
 ### **<ins><p align="center">Conditions d'utilisation :</p>**
-- Pour utiliser le code vous devez faire un fork du projet
-- Pour utiliser le code votre code doit tout le temps être public
+- Pour utiliser le code vous devez faire un fork du projet.
+- Pour utiliser le code votre code doit tout le temps être public.
+- Pour utiliser le code toute mention originale de la licence doit être gardé.
+- Pour utiliser le code vous devez garder la licence originale.
 
 ---
 
 ### **<ins><p align="center">Screenshots :</p>**
 
 <img src="images/3.png" alt="screenshot3"><p align="center"> *Page principale*
-
 &nbsp;
-
 <img src="images/4.png" alt="screenshot4"><p align="center"> *Page de gestion des skins*
-
 &nbsp;
 <img src="images/5.png" alt="screenshot5"><p align="center"> *Page de gestion des comptes*
-
 &nbsp;
 <img src="images/1.png" alt="screenshot8"><p align="center"> *Page de connexion*
-
 ---
 
 ### **<ins><p align="center">Fonctionnalitées du launcher :</p>**
@@ -59,7 +56,7 @@
 - 🟢 Statut serveur complet.
 
     - Opérationnel ou hors ligne.
-    
+
     - Nombres de joueurs connectés.
 
 - ☕ Installation de Java automatique.
@@ -108,10 +105,12 @@ Si vous avez des questions, un problème ou des suggestions n'hésitez pas à re
 
 <br>
 
-[<p align="center"><img src="https://discordapp.com/api/guilds/819729377650278420/embed.png?style=banner2" alt="discord">](https://discord.gg/e9q7Yr2cuQ) 
----
-
+[![discord](https://discordapp.com/api/guilds/819729377650278420/embed.png?style=banner2)][discord]
 <br>
 <br>
 
 [<p align="center">]() *Readme réalisé par [@Fefe_du_973](https://github.com/Fefedu973)*  </p>
+
+---
+
+[discord]: http://discord.luuxis.fr 'Discord'

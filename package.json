@@ -1,8 +1,8 @@
 {
-    "name": "The-Fortress-Of-Thieves",
-    "productname": "The Fortress Of Thieves",
-    "version": "0.1.2",
-    "description": "Launcher officiel du serveur Minecraft RPG The Fortress Of Thieves.",
+    "name": "TheFortressOfThievesLauncher",
+    "preductname": "The Fortress Of Thieves",
+    "version": "0.1.4",
+    "description": "Launcher officiel du serveur Minecraft RPG The Fortress Of Thieves",
     "main": "src/app.js",
     "author": "Luuxis, Watherfoxx",
     "url": "http://51.254.99.22/public/storage/launcher-v3/",
@@ -11,7 +11,8 @@
     },
     "scripts": {
         "start": "cross-env-shell NODE_ENV=dev electron .",
-        "build": "node build.js",
+        "build": "node build.js --build",
+        "icon": "node build.js --icon=https://raw.githubusercontent.com/luuxis/Selvania-Launcher/master/src/assets/images/icon.png",
         "dev": "nodemon --exec npm start"
     },
     "license": "CC0",
@@ -20,15 +21,17 @@
     },
     "dependencies": {
         "electron-updater": "^5.0.1",
-        "minecraft-java-core": "^3.1.1",
-        "node-fetch": "^2.6.7"
+        "jimp": "^0.22.8",
+        "minecraft-java-core": "^3.5.0",
+        "node-fetch": "^2.6.7",
+        "png2icons": "^2.0.1"
     },
     "devDependencies": {
         "cross-env": "^7.0.3",
         "electron": "^20.0.0",
         "electron-builder": "^23.0.3",
         "nodemon": "^2.0.16"
-    },  
+    },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/Watherfoxx/TheFortressOfThievesLauncher.git"
