@@ -5,7 +5,7 @@
     "description": "Launcher officiel du serveur Minecraft RPG The Fortress Of Thieves",
     "main": "src/app.js",
     "author": "Luuxis, Watherfoxx",
-    "url": "http://51.254.99.22/public/storage/launcher-v3/",
+    "url": "http://51.254.99.22/launcher",
     "engines": {
         "node": "^18.x.x"
     },
