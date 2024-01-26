@@ -5,7 +5,7 @@
     "description": "Launcher officiel du serveur Minecraft RPG The Fortress Of Thieves",
     "main": "src/app.js",
     "author": {
-        "name": "luuxis, Watherfoxx",
+        "name": "luuxis, Watherfoxx, Inc",
         "email": "contact@luuxis.fr",
         "url": "https://github.com/luuxis"
     },
@@ -39,6 +39,6 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/luuxis/Selvania-Launcher.git"
+        "url": "git+https://github.com/Watherfoxx/TheFortressOfThievesLauncher.git"
     }
 }
