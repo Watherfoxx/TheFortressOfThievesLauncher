@@ -5,7 +5,7 @@
     "description": "Launcher officiel du serveur Minecraft RPG The Fortress Of Thieves",
     "main": "src/app.js",
     "author": {
-        "name": "luuxis, Watherfoxx, Inc.",
+        "name": "luuxis, Watherfoxx",
         "email": "contact@luuxis.fr",
         "url": "https://github.com/luuxis"
     },
