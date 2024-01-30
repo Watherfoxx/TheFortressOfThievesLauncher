@@ -103,6 +103,21 @@ class Home {
         });
     }
 
+    async instanceCheck() {
+        const configClient = await this.db.readData('configClient');
+        const auth = await this.db.readData('accounts', configClient.account_selected);
+        const instancesList = await config.getInstanceList();
+        const instanceSelect = configClient?.instance_selct;
+    
+        if (instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length === 1) {
+            document.querySelector('.instance-select').style.display = 'none';
+            document.querySelector('.play-instance').style.paddingRight = '0';
+        }
+    
+        // console.log(`Nombre d'instances visibles par le joueur : ${instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length}`);
+    }    
+
+
     async instancesSelect() {
         let configClient = await this.db.readData('configClient')
         let auth = await this.db.readData('accounts', configClient.account_selected)
@@ -113,11 +128,12 @@ class Home {
         let instancePopup = document.querySelector('.instance-popup')
         let instancesListPopup = document.querySelector('.instances-List')
         let instanceCloseBTN = document.querySelector('.close-popup')
-
-        if (instancesList.length === 1) {
+        if (instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length === 1) {
             document.querySelector('.instance-select').style.display = 'none'
             instanceBTN.style.paddingRight = '0'
         }
+        console.log(`Nombre d'instances visibles par le joueur : ${instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length}`)
+        ;
 
         if (!instanceSelect) {
             let newInstanceSelect = instancesList.find(i => i.whitelistActive == false)

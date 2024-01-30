@@ -1,8 +1,8 @@
 {
     "name": "TheFortressOfThievesLauncher",
     "preductname": "The Fortress Of Thieves",
-    "version": "0.2.5",
-    "description": "Launcher officiel du serveur Minecraft RPG The Fortress Of Thieves.",
+    "version": "0.2.6",
+    "description": "Launcher officiel du serveur Minecraft RPG The Fortress Of Thieves",
     "main": "src/app.js",
     "author": {
         "name": "luuxis, Watherfoxx, Inc",
