@@ -1,7 +1,7 @@
 {
     "name": "TheFortressOfThievesLauncher",
     "preductname": "The Fortress Of Thieves",
-    "version": "0.2.6",
+    "version": "0.2.7",
     "description": "Launcher officiel du serveur Minecraft RPG The Fortress Of Thieves",
     "main": "src/app.js",
     "author": {
@@ -23,7 +23,7 @@
     },
     "dependencies": {
         "electron-updater": "^6.1.4",
-        "minecraft-java-core": "^3.8.1",
+        "minecraft-java-core": "^3.8.3",
         "node-bdd": "^2.0.3",
         "node-fetch": "^2.7.0",
         "xml-js": "^1.6.11"
