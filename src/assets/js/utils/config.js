@@ -4,12 +4,12 @@
  */
 
 const pkg = require('../package.json');
-const nodeFetch = require("node-fetch");
+const nodeFetch = require('node-fetch');
 const convert = require('xml-js');
 let url = pkg.user ? `${pkg.url}/${pkg.user}` : pkg.url
 
 let config = `${url}/launcher/config-launcher/config.json`;
-let news = `${url}/launcher/news-launcher/news.json`;
+let news = `https://thefortressofthieves.fr/api/rss`;
 
 class Config {
     GetConfig() {
@@ -38,41 +38,30 @@ class Config {
     }
 
     async getNews() {
-        let config = await this.GetConfig() || {}
-
-        if (config.rss) {
-            return new Promise((resolve, reject) => {
-                nodeFetch(config.rss).then(async config => {
-                    if (config.status === 200) {
-                        let news = [];
-                        let response = await config.text()
-                        response = (JSON.parse(convert.xml2json(response, { compact: true })))?.rss?.channel?.item;
-
-                        if (!Array.isArray(response)) response = [response];
-                        for (let item of response) {
-                            news.push({
-                                title: item.title._text,
-                                content: item['content:encoded']._text,
-                                author: item['dc:creator']._text,
-                                publish_date: item.pubDate._text
-                            })
-                        }
-                        return resolve(news);
-                    }
-                    else return reject({ error: { code: config.statusText, message: 'server not accessible' } });
-                }).catch(error => reject({ error }))
-            })
+        let rss = await fetch(news).then(res => res.text());
+        let rssparse = JSON.parse(convert.xml2json(rss, { compact: true }));
+        let data = [];
+        if (rssparse.rss.channel.item.length) {
+            for (let i of rssparse.rss.channel.item) {
+                let item = {}
+                item.title = i.title._text;
+                item.content = i['content:encoded']._text;
+                item.author = i['dc:creator']._text;
+                item.publish_date = i.pubDate._text;
+                data.push(item);
+            }
         } else {
-            return new Promise((resolve, reject) => {
-                nodeFetch(news).then(async config => {
-                    if (config.status === 200) return resolve(config.json());
-                    else return reject({ error: { code: config.statusText, message: 'server not accessible' } });
-                }).catch(error => {
-                    return reject({ error });
-                })
-            })
+            let item = {}
+            item.title = rssparse.rss.channel.item.title._text;
+            item.content = rssparse.rss.channel.item['content:encoded']._text;
+            item.author = rssparse.rss.channel.item['dc:creator']._text;
+            item.publish_date = rssparse.rss.channel.item.pubDate._text;
+            data.push(item);
+
         }
+        return data;
     }
 }
+
 
 export default new Config;
