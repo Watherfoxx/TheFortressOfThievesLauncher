@@ -23,7 +23,7 @@
     },
     "dependencies": {
         "electron-updater": "^6.1.4",
-        "minecraft-java-core": "^3.7.1-beta.2",
+        "minecraft-java-core": "^3.11.1-beta.1",
         "node-bdd": "^2.0.3",
         "node-fetch": "^2.7.0",
         "xml-js": "^1.6.11"
