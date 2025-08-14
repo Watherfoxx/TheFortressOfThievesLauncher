@@ -263,10 +263,24 @@ class Home {
 
             JVM_ARGS: [
                 //`-XX:MaxDirectMemorySize=${configClient.java_config.java_memory.max * 1024 / 2}M`,
-                '-XX:MaxDirectMemorySize=6G',
-                '-XX:+PrintFlagsFinal',
-                '-Dio.netty.maxDirectMemory=6G'
-            ],
+                //'-XX:MaxDirectMemorySize=6G',
+                //'-XX:+PrintFlagsFinal',
+                //'-Dio.netty.maxDirectMemory=6G',
+                //'-Dio.netty.leakDetectionLevel=paranoid',
+                '-XX:+UseG1GC',
+                '-XX:+ParallelRefProcEnabled',
+                '-XX:MaxGCPauseMillis=100',
+                '-XX:+UnlockExperimentalVMOptions',
+                '-XX:+DisableExplicitGC',
+                '-XX:G1NewSizePercent=20',
+                '-XX:G1MaxNewSizePercent=60',
+                '-XX:G1HeapRegionSize=8M',
+                '-XX:G1ReservePercent=20',
+                '-XX:InitiatingHeapOccupancyPercent=15',
+                '-XX:+AlwaysPreTouch',
+                '-XX:+PerfDisableSharedMem',
+                '-XX:+UseStringDeduplication'
+            ]
         }
          
         
