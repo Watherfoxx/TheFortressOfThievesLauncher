@@ -259,9 +259,15 @@ class Home {
             memory: {
                 min: `${configClient.java_config.java_memory.min * 1024}M`,
                 max: `${configClient.java_config.java_memory.max * 1024}M`
-            }
-        }
+            },
 
+            JVM_ARGS: [
+                `-XX:MaxDirectMemorySize=${configClient.java_config.java_memory.max * 1024 / 2}M`,
+            ],
+        }
+         
+
+        console.log(opt);
         launch.Launch(opt);
 
         playInstanceBTN.style.display = "none"
