@@ -262,11 +262,14 @@ class Home {
             },
 
             JVM_ARGS: [
-                `-XX:MaxDirectMemorySize=${configClient.java_config.java_memory.max * 1024 / 2}M`,
+                //`-XX:MaxDirectMemorySize=${configClient.java_config.java_memory.max * 1024 / 2}M`,
+                '-XX:MaxDirectMemorySize=6G',
+                '-XX:+PrintFlagsFinal',
+                '-Dio.netty.maxDirectMemory=6G'
             ],
         }
          
-
+        
         console.log(opt);
         launch.Launch(opt);
 
