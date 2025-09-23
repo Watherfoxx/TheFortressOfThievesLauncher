@@ -267,7 +267,7 @@ class Home {
                 //'-XX:+PrintFlagsFinal',
                 //'-Dio.netty.leakDetectionLevel=paranoid',
                 '-Dio.netty.maxDirectMemory=256M',
-                '-XX:NativeMemoryTracking=summary',
+                '-XX:NativeMemoryTracking=detail',
                 '-XX:+UnlockDiagnosticVMOptions',
                 '-XX:+PrintNMTStatistics',
                 '-XX:+UseG1GC',
