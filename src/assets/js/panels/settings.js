@@ -1,6 +1,6 @@
 /**
  * @author Luuxis
- * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
+ * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
  */
 
 import { changePanel, accountSelect, database, Slider, config, setStatus, popup, appdata, setBackground } from '../utils.js'
@@ -252,11 +252,9 @@ class Settings {
         })
 
         let themeBox = document.querySelector(".theme-box");
-        let theme = configClient?.launcher_config?.theme || "auto";
+        let theme = configClient?.launcher_config?.theme || "light";
 
-        if (theme == "auto") {
-            document.querySelector('.theme-btn-auto').classList.add('active-theme');
-        } else if (theme == "dark") {
+        if (theme == "dark") {
             document.querySelector('.theme-btn-sombre').classList.add('active-theme');
         } else if (theme == "light") {
             document.querySelector('.theme-btn-clair').classList.add('active-theme');
@@ -268,11 +266,7 @@ class Settings {
                 if (e.target.classList.contains('active-theme')) return
                 activeTheme?.classList.remove('active-theme');
 
-                if (e.target.classList.contains('theme-btn-auto')) {
-                    setBackground();
-                    theme = "auto";
-                    e.target.classList.add('active-theme');
-                } else if (e.target.classList.contains('theme-btn-sombre')) {
+                if (e.target.classList.contains('theme-btn-sombre')) {
                     setBackground(true);
                     theme = "dark";
                     e.target.classList.add('active-theme');

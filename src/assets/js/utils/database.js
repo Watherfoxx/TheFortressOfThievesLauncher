@@ -1,6 +1,6 @@
 /**
  * @author Luuxis
- * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
+ * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
  */
 
 const { NodeBDD, DataType } = require('node-bdd');
@@ -13,7 +13,7 @@ class database {
     async creatDatabase(tableName, tableConfig) {
         return await nodedatabase.intilize({
             databaseName: 'Databases',
-            fileType: dev ? 'sqlite' : 'db',
+            fileType: 'db',
             tableName: tableName,
             path: `${await ipcRenderer.invoke('path-user-data')}${dev ? '../..' : '/databases'}`,
             tableColumns: tableConfig,

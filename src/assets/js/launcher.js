@@ -1,6 +1,6 @@
 /**
  * @author Luuxis
- * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
+ * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
  */
 // import panel
 import Login from './panels/login.js';
@@ -14,7 +14,6 @@ const { AZauth, Microsoft, Mojang } = require('minecraft-java-core');
 // libs
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
-const os = require('os');
 
 class Launcher {
     async init() {
@@ -22,7 +21,7 @@ class Launcher {
         console.log('Initializing Launcher...');
         this.shortcut()
         await setBackground()
-        this.initFrame();
+        if (process.platform == 'win32') this.initFrame();
         this.config = await config.GetConfig().then(res => res).catch(err => err);
         if (await this.config.error) return this.errorConnect()
         this.db = new database();
@@ -62,16 +61,15 @@ class Launcher {
 
     initFrame() {
         console.log('Initializing Frame...')
-        const platform = os.platform() === 'darwin' ? "darwin" : "other";
+        document.querySelector('.frame').classList.toggle('hide')
+        document.querySelector('.dragbar').classList.toggle('hide')
 
-        document.querySelector(`.${platform} .frame`).classList.toggle('hide')
-
-        document.querySelector(`.${platform} .frame #minimize`).addEventListener('click', () => {
+        document.querySelector('#minimize').addEventListener('click', () => {
             ipcRenderer.send('main-window-minimize');
         });
 
         let maximized = false;
-        let maximize = document.querySelector(`.${platform} .frame #maximize`);
+        let maximize = document.querySelector('#maximize')
         maximize.addEventListener('click', () => {
             if (maximized) ipcRenderer.send('main-window-maximize')
             else ipcRenderer.send('main-window-maximize');
@@ -80,7 +78,7 @@ class Launcher {
             maximize.classList.toggle('icon-restore-down')
         });
 
-        document.querySelector(`.${platform} .frame #close`).addEventListener('click', () => {
+        document.querySelector('#close').addEventListener('click', () => {
             ipcRenderer.send('main-window-close');
         })
     }
@@ -96,8 +94,8 @@ class Launcher {
                 java_config: {
                     java_path: null,
                     java_memory: {
-                        min: 2,
-                        max: 4
+                        min: 3,
+                        max: 8
                     }
                 },
                 game_config: {
@@ -108,7 +106,7 @@ class Launcher {
                 },
                 launcher_config: {
                     download_multi: 5,
-                    theme: 'auto',
+                    theme: 'dark',
                     closeLauncher: 'close-launcher',
                     intelEnabledMac: true
                 }

@@ -86,9 +86,10 @@
  ******************************************************************************/
 
 .new-tab {
+    margin-left: 50px;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     width: 85%;
     height: 100%;
 }
@@ -123,17 +124,18 @@
     align-items: center;
 }
 
+.space {
+    margin-right: 5px;
+}
+
 .header-text .title {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    font-size: 1.2rem;
-    text-align: center;
+    font-size: 1.5rem;
+    text-align: left;
 }
 
 .news-header .date {
     display: flex;
-    flex-direction: column;
-    align-items: center;
+    flex-direction: row;
 }
 
 .news-content .bbWrapper {

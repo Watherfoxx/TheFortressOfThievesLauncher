@@ -1,6 +1,6 @@
 /**
  * @author Luuxis
- * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
+ * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
  */
 const nodeFetch = require('node-fetch')
 
@@ -22,11 +22,16 @@ export class skin2D {
 }
 
 async function getData(data) {
+    if (typeof data !== 'string') {
+        throw new Error('Invalid data type. Expected a string.');
+    }
+
     if (data.startsWith('http')) {
         let response = await nodeFetch(data);
         let buffer = await response.buffer();
         data = `data:image/png;base64,${await buffer.toString('base64')}`;
     }
+
     let img = new Image();
     img.src = data;
     return img;
