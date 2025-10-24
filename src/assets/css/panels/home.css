@@ -124,18 +124,17 @@
     align-items: center;
 }
 
-.space {
-    margin-right: 5px;
-}
-
 .header-text .title {
-    font-size: 1.5rem;
-    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    font-size: 1.2rem;
+    text-align: center;
 }
 
 .news-header .date {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
+    align-items: center;
 }
 
 .news-content .bbWrapper {

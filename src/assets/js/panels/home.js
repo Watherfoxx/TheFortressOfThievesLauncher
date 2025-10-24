@@ -1,6 +1,6 @@
 /**
  * @author Luuxis
- * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
+ * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
  */
 import { config, database, logger, changePanel, appdata, setStatus, pkg, popup } from '../utils.js'
 
@@ -49,6 +49,7 @@ class Home {
                     blockNews.classList.add('news-block');
                     blockNews.innerHTML = `
                         <div class="news-header">
+                            <img class="server-status-icon" src="assets/images/icon.png">
                             <div class="header-text">
                                 <div class="title">${News.title}</div>
                             </div>
@@ -103,21 +104,6 @@ class Home {
         });
     }
 
-    async instanceCheck() {
-        const configClient = await this.db.readData('configClient');
-        const auth = await this.db.readData('accounts', configClient.account_selected);
-        const instancesList = await config.getInstanceList();
-        const instanceSelect = configClient?.instance_selct;
-    
-        if (instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length === 1) {
-            document.querySelector('.instance-select').style.display = 'none';
-            document.querySelector('.play-instance').style.paddingRight = '0';
-        }
-    
-        // console.log(`Nombre d'instances visibles par le joueur : ${instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length}`);
-    }    
-
-
     async instancesSelect() {
         let configClient = await this.db.readData('configClient')
         let auth = await this.db.readData('accounts', configClient.account_selected)
@@ -128,12 +114,11 @@ class Home {
         let instancePopup = document.querySelector('.instance-popup')
         let instancesListPopup = document.querySelector('.instances-List')
         let instanceCloseBTN = document.querySelector('.close-popup')
-        if (instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length === 1) {
+
+        if (instancesList.length === 1) {
             document.querySelector('.instance-select').style.display = 'none'
             instanceBTN.style.paddingRight = '0'
         }
-        console.log(`Nombre d'instances visibles par le joueur : ${instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length}`)
-        ;
 
         if (!instanceSelect) {
             let newInstanceSelect = instancesList.find(i => i.whitelistActive == false)
