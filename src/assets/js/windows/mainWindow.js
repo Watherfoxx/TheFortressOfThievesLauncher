@@ -1,6 +1,6 @@
 /**
  * @author Luuxis
- * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
+ * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
  */
 
 const { app, BrowserWindow, Menu } = require("electron");
@@ -30,7 +30,7 @@ function createWindow() {
         minHeight: 552,
         resizable: true,
         icon: `./src/assets/images/icon.${os.platform() === "win32" ? "ico" : "png"}`,
-        frame: false,
+        frame: os.platform() !== 'win32',
         show: false,
         webPreferences: {
             contextIsolation: false,
