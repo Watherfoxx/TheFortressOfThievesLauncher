@@ -40,7 +40,6 @@
 .input-login .email,
 .input-login .password,
 .A2F {
-    font-family: 'Poppins';
     color: var(--color);
     background: none;
     border: solid 2px var(--element-color);
