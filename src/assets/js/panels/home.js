@@ -1,6 +1,6 @@
 /**
  * @author Luuxis
- * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
+ * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
  */
 import { config, database, logger, changePanel, appdata, setStatus, pkg, popup } from '../utils.js'
 
@@ -49,21 +49,19 @@ class Home {
                     blockNews.classList.add('news-block');
                     blockNews.innerHTML = `
                         <div class="news-header">
+                            <img class="server-status-icon" src="assets/images/icon.png">
                             <div class="header-text">
                                 <div class="title">${News.title}</div>
                             </div>
                             <div class="date">
-                                <div class="day">${date.day} </div>
-                                <span class="space"> </span>
-                                <div class="month">${date.month} </div>
-                                <span class="space"> </span>
-                                <div class="year">${date.year}</div>
+                                <div class="day">${date.day}</div>
+                                <div class="month">${date.month}</div>
                             </div>
                         </div>
                         <div class="news-content">
                             <div class="bbWrapper">
                                 <p>${News.content.replace(/\n/g, '</br>')}</p>
-                                <p class="news-author"></span></p>
+                                <p class="news-author">Auteur - <span>${News.author}</span></p>
                             </div>
                         </div>`
                     newsElement.appendChild(blockNews);
@@ -81,7 +79,6 @@ class Home {
                         <div class="date">
                             <div class="day">1</div>
                             <div class="month">Janvier</div>
-                            <div class="year">2021</div>
                         </div>
                     </div>
                     <div class="news-content">
@@ -103,21 +100,6 @@ class Home {
         });
     }
 
-    async instanceCheck() {
-        const configClient = await this.db.readData('configClient');
-        const auth = await this.db.readData('accounts', configClient.account_selected);
-        const instancesList = await config.getInstanceList();
-        const instanceSelect = configClient?.instance_selct;
-    
-        if (instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length === 1) {
-            document.querySelector('.instance-select').style.display = 'none';
-            document.querySelector('.play-instance').style.paddingRight = '0';
-        }
-    
-        // console.log(`Nombre d'instances visibles par le joueur : ${instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length}`);
-    }    
-
-
     async instancesSelect() {
         let configClient = await this.db.readData('configClient')
         let auth = await this.db.readData('accounts', configClient.account_selected)
@@ -128,12 +110,11 @@ class Home {
         let instancePopup = document.querySelector('.instance-popup')
         let instancesListPopup = document.querySelector('.instances-List')
         let instanceCloseBTN = document.querySelector('.close-popup')
-        if (instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length === 1) {
+
+        if (instancesList.length === 1) {
             document.querySelector('.instance-select').style.display = 'none'
             instanceBTN.style.paddingRight = '0'
         }
-        console.log(`Nombre d'instances visibles par le joueur : ${instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length}`)
-        ;
 
         if (!instanceSelect) {
             let newInstanceSelect = instancesList.find(i => i.whitelistActive == false)
@@ -249,7 +230,12 @@ class Home {
 
             ignored: [...options.ignored],
 
-            javaPath: configClient.java_config.java_path,
+            java: {
+                path: configClient.java_config.java_path,
+            },
+
+            JVM_ARGS:  options.jvm_args ? options.jvm_args : [],
+            GAME_ARGS: options.game_args ? options.game_args : [],
 
             screen: {
                 width: configClient.game_config.screen_size.width,
@@ -259,32 +245,9 @@ class Home {
             memory: {
                 min: `${configClient.java_config.java_memory.min * 1024}M`,
                 max: `${configClient.java_config.java_memory.max * 1024}M`
-            },
-
-            JVM_ARGS: [
-                //`-XX:MaxDirectMemorySize=${configClient.java_config.java_memory.max * 1024 / 2}M`,
-                //'-XX:MaxDirectMemorySize=6G',
-                //'-XX:+PrintFlagsFinal',
-                //'-Dio.netty.leakDetectionLevel=paranoid',
-                '-Dio.netty.maxDirectMemory=0',
-                '-XX:+UseG1GC',
-                '-XX:+ParallelRefProcEnabled',
-                '-XX:MaxGCPauseMillis=100',
-                '-XX:+UnlockExperimentalVMOptions',
-                '-XX:+DisableExplicitGC',
-                '-XX:G1NewSizePercent=20',
-                '-XX:G1MaxNewSizePercent=60',
-                '-XX:G1HeapRegionSize=8M',
-                '-XX:G1ReservePercent=20',
-                '-XX:InitiatingHeapOccupancyPercent=15',
-                '-XX:+AlwaysPreTouch',
-                '-XX:+PerfDisableSharedMem',
-                '-XX:+UseStringDeduplication'
-            ]
+            }
         }
-         
-        
-        console.log(opt);
+
         launch.Launch(opt);
 
         playInstanceBTN.style.display = "none"
@@ -325,7 +288,7 @@ class Home {
         launch.on('patch', patch => {
             console.log(patch);
             ipcRenderer.send('main-window-progress-load')
-            infoStarting.innerHTML = `Finition de la proue`
+            infoStarting.innerHTML = `Patch en cours...`
         });
 
         launch.on('data', (e) => {
@@ -335,7 +298,7 @@ class Home {
             };
             new logger('Minecraft', '#36b030');
             ipcRenderer.send('main-window-progress-load')
-            infoStarting.innerHTML = `Ancre levée !`
+            infoStarting.innerHTML = `Demarrage en cours...`
             console.log(e);
         })
 

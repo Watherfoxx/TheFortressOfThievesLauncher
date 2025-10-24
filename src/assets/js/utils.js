@@ -1,6 +1,6 @@
 /**
  * @author Luuxis
- * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
+ * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
  */
 
 const { ipcRenderer } = require('electron')
@@ -50,18 +50,13 @@ async function appdata() {
 }
 
 async function addAccount(data) {
-    let skinURL;
-
-    skinURL = `https://mc-heads.net/avatar/${encodeURIComponent(data.name)}`;
-    data.skinURL = skinURL;
-
-    // Appliquer l'URL du skin à l'élément .player-head
-    document.querySelector(".player-head").style.backgroundImage = skinURL ? `url(${skinURL})` : '';
+    let skin = false
+    if (data?.profile?.skins[0]?.base64) skin = await new skin2D().creatHeadTexture(data.profile.skins[0].base64);
     let div = document.createElement("div");
     div.classList.add("account");
     div.id = data.ID;
     div.innerHTML = `
-        <div class="profile-image" ${skinURL ? 'style="background-image: url(' + skinURL + ');"' : ''}></div>
+        <div class="profile-image" ${skin ? 'style="background-image: url(' + skin + ');"' : ''}></div>
         <div class="profile-infos">
             <div class="profile-pseudo">${data.name}</div>
             <div class="profile-uuid">${data.uuid}</div>
@@ -69,29 +64,22 @@ async function addAccount(data) {
         <div class="delete-profile" id="${data.ID}">
             <div class="icon-account-delete delete-profile-icon"></div>
         </div>
-    `;
+    `
     return document.querySelector('.accounts-list').appendChild(div);
 }
 
 async function accountSelect(data) {
     let account = document.getElementById(`${data.ID}`);
-    let activeAccount = document.querySelector('.account-select');
+    let activeAccount = document.querySelector('.account-select')
 
     if (activeAccount) activeAccount.classList.toggle('account-select');
     account.classList.add('account-select');
-    
-    let skinURL;
-
-    skinURL = `https://mc-heads.net/avatar/${encodeURIComponent(data.name)}`;
-    data.skinURL = skinURL;
-
-    // Appliquer l'URL du skin à l'élément .player-head
-    document.querySelector(".player-head").style.backgroundImage = skinURL ? `url(${skinURL})` : '';
+    if (data?.profile?.skins[0]?.base64) headplayer(data.profile.skins[0].base64);
 }
-
 
 async function headplayer(skinBase64) {
     let skin = await new skin2D().creatHeadTexture(skinBase64);
+    document.querySelector(".player-head").style.backgroundImage = `url(${skin})`;
 }
 
 async function setStatus(opt) {
@@ -115,11 +103,11 @@ async function setStatus(opt) {
     if (!statusServer.error) {
         statusServerElement.classList.remove('red')
         document.querySelector('.status-player-count').classList.remove('red')
-        statusServerElement.innerHTML = `En ligne`
+        statusServerElement.innerHTML = `En ligne - ${statusServer.ms} ms`
         playersOnline.innerHTML = statusServer.playersConnect
     } else {
         statusServerElement.classList.add('red')
-        statusServerElement.innerHTML = `Fermé`
+        statusServerElement.innerHTML = `Ferme - 0 ms`
         document.querySelector('.status-player-count').classList.add('red')
         playersOnline.innerHTML = '0'
     }

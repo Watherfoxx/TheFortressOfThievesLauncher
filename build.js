@@ -69,9 +69,16 @@ class Index {
                 artifactName: "${productName}-${os}-${arch}.${ext}",
                 extraMetadata: { main: 'app/app.js' },
                 files: ["app/**/*", "package.json", "LICENSE.md"],
-                directories: { "output": "dist" },
-                compression: 'maximum',
+                directories: { 
+                    "output": "dist"
+                },
+                compression: 'normal',
                 asar: true,
+                electronDownload: {
+                    cache: "./node_modules/.cache/electron"
+                },
+                nodeGypRebuild: false,
+                npmRebuild: true,
                 publish: [{
                     provider: "github",
                     releaseType: 'release',
@@ -93,35 +100,32 @@ class Index {
                     icon: "./app/assets/images/icon.icns",
                     category: "public.app-category.games",
                     identity: null,
+                    hardenedRuntime: false,
+                    gatekeeperAssess: false,
+                    mergeASARs: true,
+                    singleArchFiles: "node_modules/sqlite3/**/*",
                     target: [{
                         target: "dmg",
-                        arch: "x64"
+                        arch: "universal"
                     },
                     {
-                        target: "zip",
-                        arch: "x64"
-                    },
-                    {
-                        target: "dmg",
-                        arch: "arm64"
-                    }, {
-                        target: "zip",
-                        arch: "arm64"
+                        target: "zip", 
+                        arch: "universal"
                     }]
+                },
+                dmg: {
+                    sign: false,
+                    contents: [
+                        { x: 130, y: 220 },
+                        { x: 410, y: 220, type: 'link', path: '/Applications' }
+                    ],
+                    artifactName: "${productName}-mac-${arch}.${ext}",
+                    format: "ULFO"
                 },
                 linux: {
                     icon: "./app/assets/images/icon.png",
                     target: [{
                         target: "AppImage",
-                        arch: "x64"
-                    }, {
-                        target: "deb",
-                        arch: "x64"
-                    }, {
-                        target: "tar.gz",
-                        arch: "x64"
-                    }, {
-                        target: "zip",
                         arch: "x64"
                     }]
                 }
