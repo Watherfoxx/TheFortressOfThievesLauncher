@@ -88,12 +88,6 @@ async function accountSelect(data) {
     let playerHead = document.querySelector(".player-head");
     if (playerHead) playerHead.style.backgroundImage = skinURL ? `url(${skinURL})` : '';
 
-    let playerName = document.querySelector('.player-name');
-    if (playerName) playerName.textContent = data.name || 'En attente...';
-
-    let playerRole = document.querySelector('.player-role');
-    if (playerRole) playerRole.textContent = data?.meta?.type ? `Compte ${data.meta.type}` : 'Membre d\'équipage';
-
     document.dispatchEvent(new CustomEvent('launcher-account-changed', { detail: data }));
 }
 
