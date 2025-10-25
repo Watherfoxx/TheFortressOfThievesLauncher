@@ -119,22 +119,29 @@
 
 .news-header {
     display: flex;
-    justify-content: space-between;
-    padding: 1rem 1.5rem;
+    justify-content: flex-end;
     align-items: center;
+    gap: 1.5rem;
+    padding: 1rem 1.5rem;
+}
+
+.header-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
 }
 
 .header-text .title {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    font-size: 1.2rem;
-    text-align: center;
+    font-size: 1.5rem;
+    text-align: right;
+    text-decoration: none;
 }
 
 .news-header .date {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
+    gap: 0.5rem;
 }
 
 .news-content .bbWrapper {
