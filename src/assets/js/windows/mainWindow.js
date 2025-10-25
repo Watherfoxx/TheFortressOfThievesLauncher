@@ -3,7 +3,7 @@
  * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
  */
 
-const { app, BrowserWindow, Menu } = require("electron");
+const { app, BrowserWindow, Menu, screen } = require("electron");
 const path = require("path");
 const os = require("os");
 const pkg = require("../../../../package.json");
@@ -22,12 +22,21 @@ function destroyWindow() {
 
 function createWindow() {
     destroyWindow();
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+    const targetWidth = Math.max(720, Math.round(width * 0.5));
+    const targetHeight = Math.max(480, Math.round(height * 0.5));
+    const initialWidth = Math.min(width, targetWidth);
+    const initialHeight = Math.min(height, targetHeight);
+    const minWidth = Math.min(initialWidth, Math.max(600, Math.round(width * 0.35)));
+    const minHeight = Math.min(initialHeight, Math.max(420, Math.round(height * 0.35)));
+
     mainWindow = new BrowserWindow({
         title: pkg.preductname,
-        width: 1280,
-        height: 720,
-        minWidth: 980,
-        minHeight: 552,
+        width: initialWidth,
+        height: initialHeight,
+        minWidth,
+        minHeight,
         resizable: true,
         icon: `./src/assets/images/icon.${os.platform() === "win32" ? "ico" : "png"}`,
         frame: false,
