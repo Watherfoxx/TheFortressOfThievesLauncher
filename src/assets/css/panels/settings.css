@@ -281,6 +281,10 @@
     color: var(--color);
 }
 
+.java-path-txt {
+    font-size: 1rem;
+}
+
 .java-path-input-text {
     background: var(--shadow);
     border: none;

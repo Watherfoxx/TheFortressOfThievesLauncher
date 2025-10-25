@@ -128,12 +128,12 @@
 .header-text {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: flex-start;
 }
 
 .header-text .title {
-    font-size: 1.5rem;
-    text-align: right;
+    font-size: 2rem;
+    text-align: left;
     text-decoration: none;
 }
 
