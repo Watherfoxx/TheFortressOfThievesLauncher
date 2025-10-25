@@ -1,52 +1,21 @@
 <div class="container">
-    <div class="dashboard">
-        <div class="status-wrapper">
-            <div class="status-title">État du navire</div>
-            <div class="status-server">
-                <img class="server-status-icon" src="assets/images/icon.png">
-                <div class="server-status-infos">
-                    <div class="server-status-name">Minecraft</div>
-                    <div class="server-status-text">opérationnel</div>
-                </div>
-                <div class="status-player-count">
-                    <div class="player-count">0</div>
-                </div>
-            </div>
+    <div class="status-server">
+        <img class="server-status-icon" src="assets/images/icon.png">
+        <div class="server-status-infos">
+            <div class="server-status-name">Minecraft</div>
+            <div class="server-status-text">opérationnel</div>
         </div>
-
-        <div class="play-card">
-            <div class="play-header">
-                <span class="play-title">Prêt à embarquer ?</span>
-                <span class="play-subtitle">Choisis ton monde et lève l'ancre.</span>
-            </div>
-            <div class="play-elements">
-                <div class="play-instance">
-                    <button class="play-btn">Jouer</button>
-                    <div class="instance-select icon-arrow"></div>
-                </div>
-                <div class="info-starting-game">
-                    <div class="info-starting-game-text">Connexion...</div>
-                    <progress value="0" max="0" class="progress-bar"></progress>
-                </div>
-            </div>
-        </div>
-
-        <div class="sidebar player-card">
-            <div class="player-options">
-                <div class="player-head"></div>
-                <div class="player-caption">Matelot sélectionné</div>
-            </div>
-            <div class="settings-btn icon-settings"></div>
+        <div class="status-player-count">
+            <div class="player-count">0</div>
         </div>
     </div>
 
-    <div class="content-grid">
+    <div class="home-bottom">
         <div class="new-tab">
-            <div class="titre-tab-new">Journal de bord</div>
+            <div class="titre-tab-new">Actualités</div>
             <div class="news-list content-scroll"></div>
         </div>
         <div class="social-tab">
-            <div class="social-title">Ports alliés</div>
             <div class="social-list content-scroll">
                 <div data-url="https://discord.gg/25w5DzQYB4" class="social-block">
                     <div class="icon-discord icon-social"></div>
@@ -61,6 +30,25 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="player-options">
+            <div class="player-head"></div>
+        </div>
+
+        <div class="play-elements">
+            <div class="play-instance">
+                <button class="play-btn">Jouer</button>
+                <div class="instance-select icon-arrow"></div>
+            </div>
+            <div class="info-starting-game">
+                <div class="info-starting-game-text">Connexion...</div>
+                <progress value="0" max="0" class="progress-bar"></progress>
+            </div>
+        </div>
+
+        <div class="settings-btn icon-settings"></div>
     </div>
 
     <div class="instance-popup">

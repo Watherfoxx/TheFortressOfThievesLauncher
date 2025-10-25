@@ -1,59 +1,24 @@
 .global {
-    --element-color: #c58b3a;
+    --element-color: #176b00;
     --transition: all 0.5s cubic-bezier(1, 0.46, 0, 1.29);
-    --dark-color: #0d1419;
-    --light-color: #f6eddc;
-    --accent: #d8a24a;
-    --frame-border: rgba(216, 162, 74, 0.55);
-    --window-shadow: 0 24px 60px rgba(5, 8, 10, 0.65);
-    --ornament-rim: rgba(216, 162, 74, 0.45);
-    --scrollbar-color: rgba(216, 162, 74, 0.45);
+    --dark-color: #292929;
+    --light-color: rgb(245, 245, 245);
 }
 
 .dark {
-    --color: #f8eddc;
-    --muted-color: rgba(248, 237, 220, 0.68);
-    --background: rgba(13, 20, 25, 0.92);
-    --background-element: rgba(24, 34, 41, 0.9);
-    --background-transparent: rgba(24, 34, 41, 0.65);
-    --shadow: rgba(8, 12, 16, 0.65);
-    --svg-color: brightness(0) saturate(100%) invert(95%) sepia(19%) saturate(469%) hue-rotate(324deg) brightness(112%) contrast(94%);
-    --window-background: linear-gradient(140deg, rgba(9, 15, 19, 0.92) 0%, rgba(32, 42, 51, 0.9) 100%);
-    --header-gradient: linear-gradient(120deg, rgba(27, 36, 43, 0.92), rgba(16, 23, 28, 0.95));
-    --emblem-background: radial-gradient(circle, rgba(40, 53, 63, 0.95) 0%, rgba(17, 24, 29, 0.92) 100%);
-    --ornament-background: linear-gradient(160deg, rgba(19, 28, 35, 0.9), rgba(48, 63, 75, 0.95));
-    --sidebar-background: linear-gradient(180deg, rgba(14, 22, 28, 0.9), rgba(22, 32, 39, 0.88));
-    --sidebar-overlay: linear-gradient(180deg, rgba(18, 25, 32, 0.45), rgba(8, 12, 16, 0.75));
-    --content-background: rgba(12, 18, 24, 0.74);
-    --footer-background: linear-gradient(180deg, rgba(12, 18, 23, 0.94), rgba(24, 30, 36, 0.92));
-    --popup-background: linear-gradient(150deg, rgba(14, 22, 28, 0.94), rgba(31, 41, 49, 0.92));
-    --button-text: #1b1b1b;
-    --control-background: rgba(30, 39, 47, 0.78);
-    --control-border: rgba(255, 255, 255, 0.08);
-    --control-hover: rgba(45, 58, 68, 0.9);
-    --control-close-hover: #f06543;
+    --color: #F5F5F5;
+    --background: #292929;
+    --background-element: #424242;
+    --background-transparent: #2c2c2ccc;
+    --shadow: rgba(25, 25, 25, 0.7);
+    --svg-color: brightness(0) saturate(100%) invert(100%) sepia(55%) saturate(23%) hue-rotate(236deg) brightness(108%) contrast(92%);
 }
 
 .light {
-    --color: #2d1a0c;
-    --muted-color: rgba(45, 26, 12, 0.65);
-    --background: rgba(246, 237, 220, 0.92);
-    --background-element: rgba(229, 214, 191, 0.9);
-    --background-transparent: rgba(229, 214, 191, 0.6);
-    --shadow: rgba(69, 47, 28, 0.25);
-    --svg-color: brightness(0) saturate(100%) invert(21%) sepia(27%) saturate(985%) hue-rotate(8deg) brightness(94%) contrast(90%);
-    --window-background: linear-gradient(140deg, rgba(244, 232, 212, 0.95) 0%, rgba(218, 193, 156, 0.9) 100%);
-    --header-gradient: linear-gradient(120deg, rgba(215, 190, 152, 0.92), rgba(238, 226, 205, 0.96));
-    --emblem-background: radial-gradient(circle, rgba(217, 196, 164, 0.96) 0%, rgba(187, 159, 123, 0.92) 100%);
-    --ornament-background: linear-gradient(160deg, rgba(223, 204, 176, 0.88), rgba(202, 173, 135, 0.92));
-    --sidebar-background: linear-gradient(180deg, rgba(243, 229, 206, 0.9), rgba(226, 201, 165, 0.88));
-    --sidebar-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.25), rgba(241, 225, 197, 0.65));
-    --content-background: rgba(255, 248, 236, 0.72);
-    --footer-background: linear-gradient(180deg, rgba(240, 223, 197, 0.96), rgba(227, 202, 164, 0.94));
-    --popup-background: linear-gradient(150deg, rgba(244, 232, 212, 0.94), rgba(222, 200, 166, 0.92));
-    --button-text: #2d1a0c;
-    --control-background: rgba(240, 221, 190, 0.85);
-    --control-border: rgba(0, 0, 0, 0.08);
-    --control-hover: rgba(250, 232, 203, 0.95);
-    --control-close-hover: #f06543;
+    --color: #151515;
+    --background: rgb(245, 245, 245);
+    --background-element: #c2c2c2;
+    --background-transparent: rgba(204, 204, 204, 0.8);
+    --shadow: rgba(208, 208, 208, 0.7);
+    --svg-color: brightness(0) saturate(100%) invert(0%) sepia(5%) saturate(1719%) hue-rotate(357deg) brightness(94%) contrast(84%);
 }
