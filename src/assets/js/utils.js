@@ -87,6 +87,8 @@ async function accountSelect(data) {
     // Appliquer l'URL du skin à l'élément .player-head
     let playerHead = document.querySelector(".player-head");
     if (playerHead) playerHead.style.backgroundImage = skinURL ? `url(${skinURL})` : '';
+
+    document.dispatchEvent(new CustomEvent('launcher-account-changed', { detail: data }));
 }
 
 

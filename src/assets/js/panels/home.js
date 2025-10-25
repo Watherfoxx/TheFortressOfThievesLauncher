@@ -118,11 +118,30 @@ class Home {
         let instancePopup = document.querySelector('.instance-popup')
         let instancesListPopup = document.querySelector('.instances-List')
         let instanceCloseBTN = document.querySelector('.close-popup')
+        let instanceSelector = document.querySelector('.instance-select')
 
-        if (accessibleInstances.length <= 1) {
-            document.querySelector('.instance-select').style.display = 'none'
-            instanceBTN.style.paddingRight = '0'
+        const toggleInstanceSelector = (shouldDisplay) => {
+            if (!instanceSelector || !instanceBTN) return
+            if (shouldDisplay) {
+                instanceSelector.style.display = 'flex'
+                instanceBTN.style.paddingRight = ''
+            } else {
+                instanceSelector.style.display = 'none'
+                instanceBTN.style.paddingRight = '0'
+            }
         }
+
+        toggleInstanceSelector(accessibleInstances.length > 1)
+
+        document.addEventListener('launcher-account-changed', async () => {
+            let configClient = await this.db.readData('configClient')
+            let auth = await this.db.readData('accounts', configClient.account_selected)
+            let updatedAccessibleInstances = instancesList.filter(instance => {
+                if (!instance.whitelistActive) return true
+                return instance.whitelist?.includes(auth?.name)
+            })
+            toggleInstanceSelector(updatedAccessibleInstances.length > 1)
+        })
 
         if (!instanceSelect) {
             let newInstanceSelect = instancesList.find(i => i.whitelistActive == false)
