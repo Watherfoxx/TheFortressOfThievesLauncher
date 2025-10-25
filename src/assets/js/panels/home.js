@@ -3,6 +3,7 @@
  * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
  */
 import { config, database, logger, changePanel, appdata, setStatus, pkg, popup } from '../utils.js'
+import '../utils/downloader-retry.js'
 
 const { Launch } = require('minecraft-java-core')
 const { shell, ipcRenderer } = require('electron')
@@ -366,9 +367,12 @@ class Home {
         launch.on('error', err => {
             let popupError = new popup()
 
+            const errorMessage = err?.error || err?.message || 'Une erreur inconnue est survenue.'
+            const fileDetails = err?.file ? `<br><small>Fichier : ${err.file}</small>` : ''
+
             popupError.openPopup({
                 title: 'Erreur',
-                content: err.error,
+                content: `${errorMessage}${fileDetails}`,
                 color: 'red',
                 options: true
             })
@@ -381,7 +385,7 @@ class Home {
             playInstanceBTN.style.display = "flex"
             infoStarting.innerHTML = `Vérification`
             new logger(pkg.name, '#7289da');
-            console.log(err);
+            console.error(err);
         });
     }
 
