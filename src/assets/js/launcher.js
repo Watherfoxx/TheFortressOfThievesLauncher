@@ -20,8 +20,6 @@ const os = require('os');
 class Launcher {
     async init() {
         this.initLog();
-        const versionElement = document.getElementById('launcher-version');
-        if (versionElement) versionElement.textContent = pkg.version;
         console.log('Initializing Launcher...');
         this.shortcut()
         await setBackground()
