@@ -1,30 +1,24 @@
 .global {
-    --element-color: #d3a650;
-    --element-color-strong: #f0c972;
-    --transition: all 0.45s cubic-bezier(0.45, 0, 0.2, 1);
-    --dark-color: #040b14;
-    --light-color: #f7f4e6;
-    --panel-radius: 18px;
-    --surface-border: rgba(211, 166, 80, 0.38);
-    --surface-border-soft: rgba(211, 166, 80, 0.2);
-    --surface-glow: rgba(240, 201, 114, 0.12);
-    --frosted-overlay: rgba(2, 12, 24, 0.58);
+    --element-color: #176b00;
+    --transition: all 0.5s cubic-bezier(1, 0.46, 0, 1.29);
+    --dark-color: #292929;
+    --light-color: rgb(245, 245, 245);
 }
 
 .dark {
-    --color: #f6f1d1;
-    --background: rgba(9, 19, 31, 0.86);
-    --background-element: rgba(18, 32, 48, 0.85);
-    --background-transparent: rgba(10, 22, 37, 0.65);
-    --shadow: rgba(2, 6, 14, 0.72);
-    --svg-color: brightness(0) saturate(100%) invert(93%) sepia(14%) saturate(635%) hue-rotate(345deg) brightness(108%) contrast(97%);
+    --color: #F5F5F5;
+    --background: #292929;
+    --background-element: #424242;
+    --background-transparent: #2c2c2ccc;
+    --shadow: rgba(25, 25, 25, 0.7);
+    --svg-color: brightness(0) saturate(100%) invert(100%) sepia(55%) saturate(23%) hue-rotate(236deg) brightness(108%) contrast(92%);
 }
 
 .light {
-    --color: #1a1a1a;
-    --background: rgba(247, 244, 230, 0.94);
-    --background-element: rgba(254, 248, 224, 0.9);
-    --background-transparent: rgba(249, 239, 209, 0.68);
-    --shadow: rgba(133, 104, 52, 0.45);
-    --svg-color: brightness(0) saturate(100%) invert(18%) sepia(31%) saturate(345%) hue-rotate(347deg) brightness(94%) contrast(88%);
+    --color: #151515;
+    --background: rgb(245, 245, 245);
+    --background-element: #c2c2c2;
+    --background-transparent: rgba(204, 204, 204, 0.8);
+    --shadow: rgba(208, 208, 208, 0.7);
+    --svg-color: brightness(0) saturate(100%) invert(0%) sepia(5%) saturate(1719%) hue-rotate(357deg) brightness(94%) contrast(84%);
 }
