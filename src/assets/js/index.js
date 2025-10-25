@@ -39,7 +39,7 @@ class Splash {
         this.splashMessage.textContent = splash.message;
         this.splashAuthor.children[0].textContent = "" + splash.author;
         await sleep(100);
-        document.querySelector("#splash").style.display = "grid";
+        document.querySelector("#splash").style.display = "block";
         await sleep(500);
         this.splash.classList.add("opacity");
         await sleep(500);
