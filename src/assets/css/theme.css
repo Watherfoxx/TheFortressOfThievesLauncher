@@ -1,36 +1,24 @@
 .global {
-    --element-color: #d5a649;
-    --accent-strong: #f5d48b;
-    --accent-dark: #8f5f1f;
+    --element-color: #176b00;
     --transition: all 0.5s cubic-bezier(1, 0.46, 0, 1.29);
-    --dark-color: #0d161f;
-    --light-color: #fdf5e6;
+    --dark-color: #292929;
+    --light-color: rgb(245, 245, 245);
 }
 
 .dark {
-    --color: #f7f1dd;
-    --background: rgba(5, 9, 15, 0.95);
-    --background-element: rgba(16, 31, 43, 0.8);
-    --background-transparent: rgba(14, 24, 34, 0.66);
-    --shadow: rgba(4, 8, 13, 0.75);
-    --svg-color: brightness(0) saturate(100%) invert(94%) sepia(8%) saturate(644%) hue-rotate(326deg) brightness(109%) contrast(95%);
-    --glass-background: rgba(7, 12, 20, 0.82);
-    --glass-border: rgba(122, 192, 203, 0.15);
-    --panel-overlay: rgba(10, 18, 27, 0.78);
-    --panel-border: rgba(96, 165, 178, 0.22);
-    --muted-color: rgba(235, 232, 226, 0.78);
+    --color: #F5F5F5;
+    --background: #292929;
+    --background-element: #424242;
+    --background-transparent: #2c2c2ccc;
+    --shadow: rgba(25, 25, 25, 0.7);
+    --svg-color: brightness(0) saturate(100%) invert(100%) sepia(55%) saturate(23%) hue-rotate(236deg) brightness(108%) contrast(92%);
 }
 
 .light {
-    --color: #1f1a14;
-    --background: rgba(247, 242, 230, 0.92);
-    --background-element: rgba(246, 230, 197, 0.75);
-    --background-transparent: rgba(247, 234, 205, 0.75);
-    --shadow: rgba(204, 178, 127, 0.6);
-    --svg-color: brightness(0) saturate(100%) invert(25%) sepia(41%) saturate(681%) hue-rotate(357deg) brightness(91%) contrast(85%);
-    --glass-background: rgba(248, 239, 216, 0.85);
-    --glass-border: rgba(182, 139, 67, 0.35);
-    --panel-overlay: rgba(255, 248, 234, 0.82);
-    --panel-border: rgba(196, 150, 72, 0.32);
-    --muted-color: rgba(72, 57, 38, 0.72);
+    --color: #151515;
+    --background: rgb(245, 245, 245);
+    --background-element: #c2c2c2;
+    --background-transparent: rgba(204, 204, 204, 0.8);
+    --shadow: rgba(208, 208, 208, 0.7);
+    --svg-color: brightness(0) saturate(100%) invert(0%) sepia(5%) saturate(1719%) hue-rotate(357deg) brightness(94%) contrast(84%);
 }
