@@ -108,10 +108,6 @@ class Home {
         let configClient = await this.db.readData('configClient')
         let auth = await this.db.readData('accounts', configClient.account_selected)
         let instancesList = await config.getInstanceList()
-        let accessibleInstances = instancesList.filter(instance => {
-            if (!instance.whitelistActive) return true
-            return instance.whitelist?.includes(auth?.name)
-        })
         let instanceSelect = instancesList.find(i => i.name == configClient?.instance_selct) ? configClient?.instance_selct : null
 
         let instanceBTN = document.querySelector('.play-instance')
@@ -131,42 +127,51 @@ class Home {
             }
         }
 
-        toggleInstanceSelector(accessibleInstances.length > 1)
-
-        document.addEventListener('launcher-account-changed', async () => {
-            let configClient = await this.db.readData('configClient')
-            let auth = await this.db.readData('accounts', configClient.account_selected)
-            let updatedAccessibleInstances = instancesList.filter(instance => {
+        const getAccessibleInstances = (accountName) => {
+            return instancesList.filter(instance => {
                 if (!instance.whitelistActive) return true
-                return instance.whitelist?.includes(auth?.name)
+                return instance.whitelist?.includes(accountName)
             })
-            toggleInstanceSelector(updatedAccessibleInstances.length > 1)
-        })
+        }
 
-        if (!instanceSelect) {
-            let newInstanceSelect = instancesList.find(i => i.whitelistActive == false)
+        const selectFallbackInstance = (accessibleInstances) => {
+            return accessibleInstances.find(instance => instance.whitelistActive == false) || accessibleInstances[0]
+        }
+
+        const refreshInstanceAccess = async () => {
             let configClient = await this.db.readData('configClient')
-            configClient.instance_selct = newInstanceSelect.name
-            instanceSelect = newInstanceSelect.name
-            await this.db.updateData('configClient', configClient)
+            let currentAuth = await this.db.readData('accounts', configClient.account_selected)
+            let accessibleInstances = getAccessibleInstances(currentAuth?.name)
+
+            toggleInstanceSelector(accessibleInstances.length > 1)
+
+            let selectedInstance = instancesList.find(instance => instance.name == configClient?.instance_selct)
+
+            if (!selectedInstance || !accessibleInstances.some(instance => instance.name == selectedInstance.name)) {
+                let fallbackInstance = selectFallbackInstance(accessibleInstances)
+
+                if (fallbackInstance) {
+                    configClient.instance_selct = fallbackInstance.name
+                    instanceSelect = fallbackInstance.name
+                    await this.db.updateData('configClient', configClient)
+                    await setStatus(fallbackInstance.status)
+                } else {
+                    configClient.instance_selct = null
+                    instanceSelect = null
+                    await this.db.updateData('configClient', configClient)
+                    await setStatus(null)
+                }
+            } else {
+                instanceSelect = selectedInstance.name
+                await setStatus(selectedInstance.status)
+            }
+
+            auth = currentAuth
         }
 
-        for (let instance of instancesList) {
-            if (instance.whitelistActive) {
-                let whitelist = instance.whitelist.find(whitelist => whitelist == auth?.name)
-                if (whitelist !== auth?.name) {
-                    if (instance.name == instanceSelect) {
-                        let newInstanceSelect = instancesList.find(i => i.whitelistActive == false)
-                        let configClient = await this.db.readData('configClient')
-                        configClient.instance_selct = newInstanceSelect.name
-                        instanceSelect = newInstanceSelect.name
-                        setStatus(newInstanceSelect.status)
-                        await this.db.updateData('configClient', configClient)
-                    }
-                }
-            } else console.log(`Initializing instance ${instance.name}...`)
-            if (instance.name == instanceSelect) setStatus(instance.status)
-        }
+        await refreshInstanceAccess()
+
+        document.addEventListener('launcher-account-changed', refreshInstanceAccess)
 
         instancePopup.addEventListener('click', async e => {
             let configClient = await this.db.readData('configClient')
@@ -180,7 +185,7 @@ class Home {
 
                 configClient.instance_selct = newInstanceSelect
                 await this.db.updateData('configClient', configClient)
-                instanceSelect = instancesList.filter(i => i.name == newInstanceSelect)
+                instanceSelect = newInstanceSelect
                 instancePopup.style.display = 'none'
                 let instance = await config.getInstanceList()
                 let options = instance.find(i => i.name == configClient.instance_selct)
