@@ -1,24 +1,35 @@
 .global {
-    --element-color: #176b00;
-    --transition: all 0.5s cubic-bezier(1, 0.46, 0, 1.29);
-    --dark-color: #292929;
-    --light-color: rgb(245, 245, 245);
+    --element-color: #d9a441;
+    --element-color-soft: #f5c974;
+    --transition: all 0.45s cubic-bezier(0.65, 0.05, 0.36, 1);
+    --dark-color: #16181d;
+    --light-color: #f1ede4;
+    --surface-border: rgba(217, 164, 65, 0.38);
+    --window-controls-background: rgba(12, 16, 21, 0.78);
 }
 
 .dark {
-    --color: #F5F5F5;
-    --background: #292929;
-    --background-element: #424242;
-    --background-transparent: #2c2c2ccc;
-    --shadow: rgba(25, 25, 25, 0.7);
-    --svg-color: brightness(0) saturate(100%) invert(100%) sepia(55%) saturate(23%) hue-rotate(236deg) brightness(108%) contrast(92%);
+    --color: #f4e7c8;
+    --background: #070c13;
+    --background-element: rgba(9, 13, 20, 0.85);
+    --background-transparent: rgba(9, 14, 21, 0.55);
+    --shadow: rgba(6, 7, 10, 0.7);
+    --shadow-strong: 0 30px 60px rgba(1, 4, 8, 0.45);
+    --glass-background: rgba(10, 14, 20, 0.82);
+    --tag-background: rgba(12, 16, 22, 0.75);
+    --text-muted: rgba(244, 231, 200, 0.72);
+    --svg-color: brightness(0) saturate(100%) invert(90%) sepia(9%) saturate(545%) hue-rotate(337deg) brightness(104%) contrast(92%);
 }
 
 .light {
-    --color: #151515;
-    --background: rgb(245, 245, 245);
-    --background-element: #c2c2c2;
-    --background-transparent: rgba(204, 204, 204, 0.8);
-    --shadow: rgba(208, 208, 208, 0.7);
-    --svg-color: brightness(0) saturate(100%) invert(0%) sepia(5%) saturate(1719%) hue-rotate(357deg) brightness(94%) contrast(84%);
+    --color: #1f242a;
+    --background: #f4eadd;
+    --background-element: rgba(255, 255, 255, 0.8);
+    --background-transparent: rgba(255, 255, 255, 0.65);
+    --shadow: rgba(25, 28, 32, 0.08);
+    --shadow-strong: 0 24px 48px rgba(31, 29, 23, 0.18);
+    --glass-background: rgba(255, 255, 255, 0.78);
+    --tag-background: rgba(255, 255, 255, 0.85);
+    --text-muted: rgba(35, 38, 41, 0.6);
+    --svg-color: brightness(0) saturate(100%) invert(7%) sepia(10%) saturate(1126%) hue-rotate(169deg) brightness(91%) contrast(88%);
 }

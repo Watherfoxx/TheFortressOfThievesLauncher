@@ -115,11 +115,11 @@ class Home {
         const toggleInstanceSelector = (shouldDisplay) => {
             if (!instanceSelector || !instanceBTN) return
             if (shouldDisplay) {
-                instanceSelector.style.display = 'flex'
+                instanceSelector.style.display = 'grid'
                 instanceBTN.style.paddingRight = ''
             } else {
                 instanceSelector.style.display = 'none'
-                instanceBTN.style.paddingRight = '0'
+                instanceBTN.style.paddingRight = '24px'
             }
         }
 
