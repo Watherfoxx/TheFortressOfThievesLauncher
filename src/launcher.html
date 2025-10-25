@@ -6,32 +6,86 @@
     </head>
     <body>
         <div class="dragbar"></div>
-        <div class="darwin">
-            <div class="frame">
-                <div id="close" class="button-frame darwin-icon-close"></div>
-                <div id="minimize" class="button-frame darwin-icon-minimize"></div>
-                <div id="maximize" class="button-frame darwin-icon-maximize"></div>
-
+        <div class="window-controls">
+            <div class="darwin">
+                <div class="frame">
+                    <div id="close" class="button-frame darwin-icon-close"></div>
+                    <div id="minimize" class="button-frame darwin-icon-minimize"></div>
+                    <div id="maximize" class="button-frame darwin-icon-maximize"></div>
+                </div>
             </div>
-        </div>
-        <div class="other">
-            <div class="frame">
-                <div id="minimize" class="button-frame icon-minimize"></div>
-                <div id="maximize" class="button-frame icon-maximize"></div>
-                <div id="close" class="button-frame icon-close"></div>
-            </div>
-        </div>
-
-        <div class="popup">
-            <div class="popup-tab">
-                <div class="popup-title"></div>
-                <div class="popup-content"></div>
-                <div class="popup-options">
-                    <button class="popup-button">OK</button>
+            <div class="other">
+                <div class="frame">
+                    <div id="minimize" class="button-frame icon-minimize"></div>
+                    <div id="maximize" class="button-frame icon-maximize"></div>
+                    <div id="close" class="button-frame icon-close"></div>
                 </div>
             </div>
         </div>
-        <div class="panels"></div>
+
+        <div class="launcher-surface">
+            <header class="launcher-header">
+                <div class="launcher-branding">
+                    <div class="branding-mark">
+                        <img src="assets/images/icon.png" alt="The Fortress of Thieves" />
+                    </div>
+                    <div class="branding-text">
+                        <span class="launcher-title">The Fortress of Thieves</span>
+                        <span class="launcher-subtitle">Cap sur l'aventure</span>
+                    </div>
+                </div>
+                <nav class="launcher-nav">
+                    <button class="panel-nav-link" data-panel-target="login">
+                        <span class="nav-icon icon-account-add"></span>
+                        Connexion
+                    </button>
+                    <button class="panel-nav-link" data-panel-target="home">
+                        <span class="nav-icon icon-monitor"></span>
+                        Accueil
+                    </button>
+                    <button class="panel-nav-link" data-panel-target="settings">
+                        <span class="nav-icon icon-settings"></span>
+                        Paramètres
+                    </button>
+                </nav>
+            </header>
+
+            <div class="launcher-body">
+                <aside class="info-sidebar">
+                    <div class="info-card info-card--accent">
+                        <h3>Journal de bord</h3>
+                        <p>Préparez votre équipage, vérifiez vos comptes et hissez les voiles avant de vous lancer sur le serveur.</p>
+                    </div>
+                    <div class="info-card">
+                        <h3>Conseils rapides</h3>
+                        <ul class="info-list">
+                            <li>Glissez-déposez la fenêtre en maintenant la barre supérieure.</li>
+                            <li>Optimisez votre mémoire dans les paramètres Java.</li>
+                            <li>Gardez un œil sur les actualités pour anticiper les marées.</li>
+                        </ul>
+                    </div>
+                    <div class="info-card">
+                        <h3>Raccourcis</h3>
+                        <p><kbd>Ctrl</kbd> + <kbd>W</kbd> : quitter le navire</p>
+                        <p><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>I</kbd> : outils de développement</p>
+                    </div>
+                </aside>
+
+                <section class="panel-stage">
+                    <div class="popup">
+                        <div class="popup-tab">
+                            <div class="popup-title"></div>
+                            <div class="popup-content"></div>
+                            <div class="popup-options">
+                                <button class="popup-button">OK</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panels"></div>
+                </section>
+            </div>
+        </div>
+
         <script src="assets/js/launcher.js" type="module"></script>
     </body>
 </html>
