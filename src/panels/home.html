@@ -1,21 +1,58 @@
 <div class="container">
-    <div class="status-server">
-        <img class="server-status-icon" src="assets/images/icon.png">
-        <div class="server-status-infos">
-            <div class="server-status-name">Minecraft</div>
-            <div class="server-status-text">opérationnel</div>
-        </div>
-        <div class="status-player-count">
-            <div class="player-count">0</div>
-        </div>
-    </div>
+    <div class="home-grid">
+        <section class="status-server card">
+            <div class="server-status-details">
+                <img class="server-status-icon" src="assets/images/icon.png">
+                <div class="server-status-infos">
+                    <div class="server-status-name">Minecraft</div>
+                    <div class="server-status-text">Opérationnel</div>
+                </div>
+            </div>
+            <div class="status-player-count">
+                <div class="player-count">0</div>
+                <span class="player-count-label">marins en ligne</span>
+            </div>
+        </section>
 
-    <div class="home-bottom">
-        <div class="new-tab">
-            <div class="titre-tab-new">Actualités</div>
+        <section class="sidebar card">
+            <div class="player-options">
+                <div class="player-head"></div>
+                <div class="player-legend">
+                    <span class="player-rank">Équipage</span>
+                    <span class="player-hint">Sélectionnez un compte pour embarquer</span>
+                </div>
+            </div>
+
+            <div class="play-elements">
+                <div class="play-instance">
+                    <button class="play-btn">Jouer</button>
+                    <div class="instance-select icon-arrow"></div>
+                </div>
+                <div class="info-starting-game">
+                    <div class="info-starting-game-text">Connexion...</div>
+                    <progress value="0" max="0" class="progress-bar"></progress>
+                </div>
+            </div>
+
+            <div class="settings-shortcut">
+                <div class="settings-copy">Réglages du navire</div>
+                <div class="settings-btn icon-settings"></div>
+            </div>
+        </section>
+
+        <section class="new-tab card">
+            <div class="section-header">
+                <div class="titre-tab-new">Actualités du port</div>
+                <p class="section-subtitle">Derniers messages de la capitainerie</p>
+            </div>
             <div class="news-list content-scroll"></div>
-        </div>
-        <div class="social-tab">
+        </section>
+
+        <aside class="social-tab card">
+            <div class="section-header">
+                <div class="titre-tab-social">Ports d'attache</div>
+                <p class="section-subtitle">Rejoignez l'équipage</p>
+            </div>
             <div class="social-list content-scroll">
                 <div data-url="https://discord.gg/25w5DzQYB4" class="social-block">
                     <div class="icon-discord icon-social"></div>
@@ -29,26 +66,7 @@
                     <div class="icon-youtube icon-social"></div>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <div class="sidebar">
-        <div class="player-options">
-            <div class="player-head"></div>
-        </div>
-
-        <div class="play-elements">
-            <div class="play-instance">
-                <button class="play-btn">Jouer</button>
-                <div class="instance-select icon-arrow"></div>
-            </div>
-            <div class="info-starting-game">
-                <div class="info-starting-game-text">Connexion...</div>
-                <progress value="0" max="0" class="progress-bar"></progress>
-            </div>
-        </div>
-
-        <div class="settings-btn icon-settings"></div>
+        </aside>
     </div>
 
     <div class="instance-popup">

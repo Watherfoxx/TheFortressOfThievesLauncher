@@ -88,6 +88,23 @@ async function accountSelect(data) {
     let playerHead = document.querySelector(".player-head");
     if (playerHead) playerHead.style.backgroundImage = skinURL ? `url(${skinURL})` : '';
 
+    let playerRank = document.querySelector('.player-legend .player-rank');
+    let playerHint = document.querySelector('.player-legend .player-hint');
+
+    if (playerRank) {
+        const type = data?.meta?.type;
+        const rankLabel = {
+            'Xbox': 'Corsaire Microsoft',
+            'AZauth': 'Corsaire certifié',
+            'Mojang': 'Moussaillon Mojang'
+        };
+        playerRank.textContent = rankLabel[type] || 'Équipage';
+    }
+
+    if (playerHint) {
+        playerHint.textContent = data?.name ? `Bienvenue à bord, ${data.name} !` : 'Sélectionnez un compte pour embarquer';
+    }
+
     document.dispatchEvent(new CustomEvent('launcher-account-changed', { detail: data }));
 }
 
