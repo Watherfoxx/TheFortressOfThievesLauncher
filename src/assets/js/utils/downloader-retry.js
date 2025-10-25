@@ -1,8 +1,8 @@
 /**
- * Applies resilience to minecraft-java-core's Downloader by retrying
- * transient download failures instead of propagating immediate errors.
- * This helps the launcher cope with unstable connections where
- * individual file downloads may timeout intermittently.
+ * Enhances minecraft-java-core's Downloader by smoothing throughput
+ * metrics and normalising error handling. When a download fails the
+ * entire queue is cancelled and a clear, user-friendly message is
+ * emitted so the launcher can surface the problem immediately.
  */
 
 const fs = require('fs');
@@ -16,22 +16,32 @@ try {
     WebReadableStream = null;
 }
 
-const RETRY_DELAY_MS = 2000;
+const networkErrorCodes = new Set([
+    'etimedout',
+    'econnreset',
+    'econnaborted',
+    'eai_again',
+    'enotfound',
+    'enetworkdown',
+    'enetworkunreachable'
+]);
 
-const shouldRetryError = (error) => {
-    if (!error) return false;
+const getFriendlyMessage = (error) => {
+    if (!error) return null;
 
     const code = typeof error.code === 'string' ? error.code.toLowerCase() : '';
-    if (['etimedout', 'econnreset', 'econnaborted', 'eai_again'].includes(code)) {
-        return true;
+    if (networkErrorCodes.has(code)) {
+        return 'Connexion perdue. Vérifiez votre connexion Internet et réessayez.';
     }
 
     const causeCode = typeof error?.cause?.code === 'string' ? error.cause.code.toLowerCase() : '';
-    if (['etimedout', 'econnreset', 'econnaborted', 'eai_again'].includes(causeCode)) {
-        return true;
+    if (networkErrorCodes.has(causeCode)) {
+        return 'Connexion perdue. Vérifiez votre connexion Internet et réessayez.';
     }
 
-    if (error.name === 'AbortError') return true;
+    if (error.name === 'AbortError') {
+        return 'Connexion perdue. Vérifiez votre connexion Internet et réessayez.';
+    }
 
     const message = (
         error?.error ||
@@ -42,7 +52,9 @@ const shouldRetryError = (error) => {
         .toString()
         .toLowerCase();
 
-    const transientHints = [
+    if (!message) return null;
+
+    const networkHints = [
         'timeout',
         'timed out',
         'network',
@@ -50,10 +62,15 @@ const shouldRetryError = (error) => {
         'aborted',
         'socket',
         'temporarily unavailable',
-        'connection reset'
+        'connection reset',
+        'connection closed'
     ];
 
-    return transientHints.some((hint) => message.includes(hint));
+    if (networkHints.some((hint) => message.includes(hint))) {
+        return 'Connexion perdue. Vérifiez votre connexion Internet et réessayez.';
+    }
+
+    return null;
 };
 
 const formatError = (error, file) => {
@@ -66,16 +83,37 @@ const formatError = (error, file) => {
 
     if (typeof error === 'object') {
         const formatted = { ...error };
-        if (!formatted.error) {
-            formatted.error = formatted.message || formatted?.cause?.message || formatted.toString();
+        const originalMessage = formatted.error || formatted.message || formatted?.cause?.message || formatted.toString();
+        const fallback = 'Une erreur inconnue est survenue lors du téléchargement.';
+        const friendly = getFriendlyMessage(error);
+
+        if (friendly) {
+            formatted.friendlyMessage = friendly;
+            formatted.details = originalMessage && originalMessage !== friendly ? originalMessage : undefined;
+            formatted.error = friendly;
+        } else {
+            formatted.error = originalMessage || fallback;
         }
+
         if (!formatted.error) {
-            formatted.error = 'Une erreur inconnue est survenue lors du téléchargement.';
+            formatted.error = fallback;
         }
+
         if (file?.path) {
             formatted.file = file.path;
         }
+
         return formatted;
+    }
+
+    const friendly = getFriendlyMessage(error);
+    if (friendly) {
+        return {
+            error: friendly,
+            friendlyMessage: friendly,
+            details: error.toString(),
+            file: file?.path
+        };
     }
 
     return {
@@ -129,7 +167,7 @@ const patchDownloader = () => {
         }
 
         limit = Math.max(1, limit);
-        const queue = files.map((file) => ({ ...file, _retryCount: 0 }));
+        const queue = files.map((file) => ({ ...file }));
         const totalFiles = queue.length;
 
         let downloaded = 0;
@@ -138,6 +176,8 @@ const patchDownloader = () => {
         let previousDownloaded = 0;
         let lastTick = Date.now();
         const recentSpeeds = [];
+        const activeControllers = new Set();
+        let hasFatalError = false;
 
         const updateThroughput = () => {
             const now = Date.now();
@@ -162,10 +202,21 @@ const patchDownloader = () => {
 
         const throughputInterval = setInterval(updateThroughput, 500);
 
+        const abortAllActive = () => {
+            for (const controller of activeControllers) {
+                try {
+                    controller.abort();
+                } catch (error) {
+                    // Ignore abort errors; the important part is stopping the download.
+                }
+            }
+            activeControllers.clear();
+        };
+
         let resolvePromise = null;
         const tryResolve = () => {
             if (!resolvePromise) return;
-            if (completed >= totalFiles && active === 0 && queue.length === 0) {
+            if (hasFatalError || (completed >= totalFiles && active === 0 && queue.length === 0)) {
                 clearInterval(throughputInterval);
                 const resolver = resolvePromise;
                 resolvePromise = null;
@@ -190,6 +241,7 @@ const patchDownloader = () => {
             let bytesThisAttempt = 0;
             const writer = fs.createWriteStream(file.path, { flags: 'w', mode: 0o777 });
             const controller = new AbortController();
+            activeControllers.add(controller);
             const timeoutId = setTimeout(() => controller.abort(), timeout);
 
             const cleanupPartial = () => {
@@ -208,21 +260,25 @@ const patchDownloader = () => {
                 clearTimeout(timeoutId);
                 writer.destroy();
                 cleanupPartial();
-                active -= 1;
+                activeControllers.delete(controller);
 
-                if (shouldRetryError(error)) {
-                    file._retryCount += 1;
-                    setTimeout(() => {
-                        queue.push(file);
-                        pumpQueue();
-                    }, RETRY_DELAY_MS);
+                if (hasFatalError) {
+                    active = Math.max(0, active - 1);
+                    completed = Math.min(totalFiles, completed + 1);
                     pumpQueue();
-                } else {
-                    const formattedError = formatError(error, file);
-                    completed += 1;
-                    this.emit('error', formattedError);
-                    pumpQueue();
+                    tryResolve();
+                    return;
                 }
+
+                active = Math.max(0, active - 1);
+
+                const formattedError = formatError(error, file);
+                hasFatalError = true;
+                completed = Math.min(totalFiles, completed + 1);
+                abortAllActive();
+                queue.length = 0;
+                this.emit('error', formattedError);
+                pumpQueue();
                 tryResolve();
             };
 
@@ -244,8 +300,9 @@ const patchDownloader = () => {
 
                 stream.on('end', () => {
                     writer.end();
-                    active -= 1;
-                    completed += 1;
+                    activeControllers.delete(controller);
+                    active = Math.max(0, active - 1);
+                    completed = Math.min(totalFiles, completed + 1);
                     pumpQueue();
                     tryResolve();
                 });
