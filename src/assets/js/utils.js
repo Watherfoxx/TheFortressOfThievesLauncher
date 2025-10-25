@@ -54,9 +54,6 @@ async function addAccount(data) {
 
     skinURL = `https://mc-heads.net/avatar/${encodeURIComponent(data.name)}`;
     data.skinURL = skinURL;
-
-    // Appliquer l'URL du skin à l'élément .player-head
-    document.querySelector(".player-head").style.backgroundImage = skinURL ? `url(${skinURL})` : '';
     let div = document.createElement("div");
     div.classList.add("account");
     div.id = data.ID;
@@ -74,19 +71,22 @@ async function addAccount(data) {
 }
 
 async function accountSelect(data) {
+    if (!data) return;
+
     let account = document.getElementById(`${data.ID}`);
     let activeAccount = document.querySelector('.account-select');
 
     if (activeAccount) activeAccount.classList.toggle('account-select');
-    account.classList.add('account-select');
-    
+    if (account) account.classList.add('account-select');
+
     let skinURL;
 
     skinURL = `https://mc-heads.net/avatar/${encodeURIComponent(data.name)}`;
     data.skinURL = skinURL;
 
     // Appliquer l'URL du skin à l'élément .player-head
-    document.querySelector(".player-head").style.backgroundImage = skinURL ? `url(${skinURL})` : '';
+    let playerHead = document.querySelector(".player-head");
+    if (playerHead) playerHead.style.backgroundImage = skinURL ? `url(${skinURL})` : '';
 }
 
 
