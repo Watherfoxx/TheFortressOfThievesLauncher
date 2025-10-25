@@ -1,58 +1,26 @@
-@import 'font.css';
+@import "font.css";
 @import 'theme.css';
 
 body {
-    margin: 0;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--background);
-    color: var(--color);
-    font-family: 'Poppins', 'Times New Roman', serif;
-    letter-spacing: 0.06em;
+    background-color: var(--background);
+    font-family: "Poppins";
+    letter-spacing: 0px;
 }
 
-.splash-screen {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: radial-gradient(circle at 15% 20%, rgba(194, 149, 69, 0.18), transparent 55%),
-        radial-gradient(circle at 85% 80%, rgba(12, 18, 25, 0.78), transparent 65%);
-}
-
-.splash-card {
-    width: min(420px, 90vw);
-    padding: 36px 32px;
-    border-radius: 26px;
-    background: rgba(10, 16, 23, 0.85);
-    border: 1px solid rgba(243, 209, 138, 0.35);
-    box-shadow: 0 24px 45px rgba(0, 0, 0, 0.42);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 24px;
-    text-align: center;
-}
-
-.splash-emblem {
-    width: 140px;
-    height: 140px;
-    border-radius: 24px;
-    padding: 14px;
-    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.05));
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.55);
+img {
+    -webkit-user-drag: none;
+    user-select: none;
 }
 
 .splash {
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    top: 180px;
+    left: 50%;
+    transform: translate(-50%);
+    width: 140px;
+    height: 140px;
+    transition: opacity .3s, top 1.5s;
     opacity: 0;
-    transform: translateY(18px);
-    transition: opacity 0.5s ease, transform 0.8s ease;
 }
 
 .splash.opacity {
@@ -60,53 +28,88 @@ body {
 }
 
 .splash.translate {
-    transform: translateY(0);
-}
-
-.splash-message,
-.splash-author,
-.message {
-    margin: 0;
-    opacity: 0;
-    transition: opacity 0.8s ease;
+    top: 129px;
 }
 
 .splash-message {
-    font-size: 1.2rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    position: absolute;
+    top: 289px;
+    left: 0px;
+    width: 400px;
+    font: normal normal bold 19px/29px Poppins;
+    text-align: center;
+    letter-spacing: 0px;
+    transition: opacity 1.5s;
+    color: var(--color);
+    opacity: 0;
 }
 
-.splash-message.opacity,
-.splash-author.opacity,
-.message.opacity {
+.splash-message.opacity {
     opacity: 1;
 }
 
 .splash-author {
-    font-size: 0.75rem;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: rgba(243, 209, 138, 0.75);
+    position: absolute;
+    top: 326px;
+    left: 0px;
+    width: 400px;
+    text-align: center;
+    transition: opacity 1.5s;
+    font: normal normal normal 9px/13px Poppins;
+    color: var(--color);
+    opacity: 0;
 }
 
 .splash-author .author {
-    font-weight: 700;
+    font: normal normal bold 9px/13px Poppins;
+}
+
+.splash-author.opacity {
+    opacity: 1;
 }
 
 .message {
-    font-size: 1rem;
-    letter-spacing: 0.08em;
+    position: absolute;
+    top: 347px;
+    left: 0px;
+    width: 400px;
+    text-align: center;
+    transition: opacity 1.5s;
+    font: normal normal bold 18px/27px Poppins;
+    color: var(--color);
+    opacity: 0;
+}
+
+.download-update {
+    position: absolute;
+    left: 25%;
+    margin-top: 20px;
+    width: 200px;
+    font: normal normal bold 22px / 45px Poppins;
+    color: var(--color);
+    border: 2px solid var(--color);
+    border-radius: 15px;
+    transition: background-color .2s, color .2s;
+}
+
+.download-update:hover {
+    background-color: var(--color);
+    color: var(--background);
+    cursor: pointer;
+}
+
+.message.opacity {
+    opacity: 1;
 }
 
 .progress {
-    width: 70%;
-    height: 12px;
+    position: absolute;
+    top: 410px;
+    left: 106px;
+    width: 189px;
+    height: 10px;
     appearance: none;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(243, 209, 138, 0.35);
-    transition: opacity 0.3s ease;
+    transition: opacity .2s;
     opacity: 0;
 }
 
@@ -115,29 +118,12 @@ body {
 }
 
 .progress::-webkit-progress-bar {
-    background-color: transparent;
-    border-radius: 999px;
+    background-color: var(--background);
+    border: solid 1px var(--element-color);
+    border-radius: 10px;
 }
 
 .progress::-webkit-progress-value {
-    background-image: linear-gradient(135deg, rgba(194, 149, 69, 0.9), rgba(243, 209, 138, 0.9));
-    border-radius: 999px;
-}
-
-.download-update {
-    display: inline-block;
-    margin-top: 20px;
-    padding: 12px 24px;
-    font-size: 0.9rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--color);
-    border: 1px solid rgba(243, 209, 138, 0.45);
-    border-radius: 16px;
-    transition: var(--transition);
-}
-
-.download-update:hover {
-    background: linear-gradient(135deg, rgba(194, 149, 69, 0.85), rgba(243, 209, 138, 0.85));
-    color: #1f1308;
+    background-color: var(--element-color);
+    border-radius: 10px;
 }

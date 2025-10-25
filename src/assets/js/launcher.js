@@ -29,7 +29,6 @@ class Launcher {
         this.db = new database();
         await this.initConfigClient();
         this.createPanels(Login, Home, Settings);
-        this.initNavigation();
         this.startLauncher();
     }
 
@@ -128,35 +127,6 @@ class Launcher {
             panelsElem.appendChild(div);
             new panel().init(this.config);
         }
-    }
-
-    initNavigation() {
-        const navButtons = document.querySelectorAll('[data-panel-target]');
-        if (!navButtons.length) return;
-
-        const updateNavState = (panelId) => {
-            if (!panelId) return;
-            navButtons.forEach(button => {
-                const isActive = button.dataset.panelTarget === panelId;
-                button.classList.toggle('active', isActive);
-            });
-        };
-
-        navButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                const targetPanel = button.dataset.panelTarget;
-                if (!targetPanel) return;
-                changePanel(targetPanel);
-                updateNavState(targetPanel);
-            });
-        });
-
-        document.addEventListener('launcher-panel-changed', event => {
-            const activePanel = event.detail?.id;
-            updateNavState(activePanel);
-        });
-
-        updateNavState('login');
     }
 
     async startLauncher() {
