@@ -43,6 +43,7 @@ async function changePanel(id) {
     let active = document.querySelector(`.active`)
     if (active) active.classList.toggle("active");
     panel.classList.add("active");
+    document.dispatchEvent(new CustomEvent('launcher-panel-changed', { detail: { id } }));
 }
 
 async function appdata() {
