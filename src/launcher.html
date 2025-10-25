@@ -1,24 +1,65 @@
-<html>
+<!DOCTYPE html>
+<html lang="fr">
     <head>
         <meta charset="UTF-8">
         <meta http-equiv="Content-Security-Policy" content="script-src 'self';">
         <link rel="stylesheet" href="assets/css/launcher.css">
+        <title>The Fortress of Thieves</title>
     </head>
     <body>
         <div class="dragbar"></div>
+
         <div class="darwin">
-            <div class="frame">
+            <div class="frame window-controls">
                 <div id="close" class="button-frame darwin-icon-close"></div>
                 <div id="minimize" class="button-frame darwin-icon-minimize"></div>
                 <div id="maximize" class="button-frame darwin-icon-maximize"></div>
-
             </div>
         </div>
+
         <div class="other">
-            <div class="frame">
+            <div class="frame window-controls">
                 <div id="minimize" class="button-frame icon-minimize"></div>
                 <div id="maximize" class="button-frame icon-maximize"></div>
                 <div id="close" class="button-frame icon-close"></div>
+            </div>
+        </div>
+
+        <div class="launcher-shell">
+            <div class="launcher-frame">
+                <header class="launcher-header">
+                    <div class="header-brand">
+                        <div class="brand-emblem">
+                            <img src="assets/images/icon.png" alt="Emblème" />
+                        </div>
+                        <div class="brand-copy">
+                            <span class="brand-title">The Fortress of Thieves</span>
+                            <span class="brand-tagline">Cap sur l'aventure</span>
+                        </div>
+                    </div>
+                    <div class="header-ornaments">
+                        <div class="ornament"></div>
+                        <div class="ornament"></div>
+                        <div class="ornament"></div>
+                    </div>
+                </header>
+
+                <main class="launcher-body">
+                    <aside class="launcher-sidebar">
+                        <div class="sidebar-motto">Le vent est favorable.</div>
+                        <div class="sidebar-divider"></div>
+                        <p class="sidebar-hint">Configure ton navire et appareille vers l'île au trésor.</p>
+                    </aside>
+
+                    <section class="launcher-content">
+                        <div class="panels"></div>
+                    </section>
+                </main>
+
+                <footer class="launcher-footer">
+                    <div class="footer-compass"></div>
+                    <p class="footer-text">Prépare ta boussole : les mers appartiennent aux courageux.</p>
+                </footer>
             </div>
         </div>
 
@@ -31,7 +72,6 @@
                 </div>
             </div>
         </div>
-        <div class="panels"></div>
         <script src="assets/js/launcher.js" type="module"></script>
     </body>
 </html>
