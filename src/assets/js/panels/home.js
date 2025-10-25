@@ -367,12 +367,27 @@ class Home {
         launch.on('error', err => {
             let popupError = new popup()
 
-            const errorMessage = err?.error || err?.message || 'Une erreur inconnue est survenue.'
-            const fileDetails = err?.file ? `<br><small>Fichier : ${err.file}</small>` : ''
+            const userFacingMessage = err?.friendlyMessage || err?.error || err?.message || 'Une erreur inconnue est survenue.'
+            const extraDetails = []
+
+            if (err?.details && err.details !== userFacingMessage) {
+                extraDetails.push(err.details)
+            } else if (err?.message && err.message !== userFacingMessage) {
+                extraDetails.push(err.message)
+            }
+
+            if (err?.file) {
+                extraDetails.push(`Fichier : ${err.file}`)
+            }
+
+            const formattedDetails = extraDetails
+                .filter(Boolean)
+                .map(detail => `<br><small>${detail}</small>`)
+                .join('')
 
             popupError.openPopup({
                 title: 'Erreur',
-                content: `${errorMessage}${fileDetails}`,
+                content: `${userFacingMessage}${formattedDetails}`,
                 color: 'red',
                 options: true
             })
