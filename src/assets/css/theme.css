@@ -1,33 +1,24 @@
 .global {
-    --element-color: #c49a49;
-    --element-color-strong: #f2d190;
-    --element-color-muted: rgba(196, 154, 73, 0.35);
-    --transition: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
-    --panel-radius: 28px;
-    --panel-border: 1px solid rgba(255, 255, 255, 0.12);
-    --shadow-soft: 0 20px 50px rgba(4, 9, 15, 0.55);
-    --shadow-strong: 0 25px 65px rgba(0, 0, 0, 0.65);
-    --heading-letter-spacing: 0.12rem;
-    --divider: rgba(255, 255, 255, 0.12);
-    --glass: rgba(9, 20, 30, 0.65);
+    --element-color: #176b00;
+    --transition: all 0.5s cubic-bezier(1, 0.46, 0, 1.29);
+    --dark-color: #292929;
+    --light-color: rgb(245, 245, 245);
 }
 
 .dark {
-    --color: #f5eddc;
-    --background: rgba(6, 14, 24, 0.9);
-    --background-element: rgba(14, 31, 44, 0.92);
-    --background-transparent: rgba(8, 24, 38, 0.8);
-    --background-deep: #050c15;
-    --shadow: rgba(3, 9, 16, 0.8);
-    --svg-color: brightness(0) saturate(100%) invert(96%) sepia(28%) saturate(323%) hue-rotate(315deg) brightness(101%) contrast(92%);
+    --color: #F5F5F5;
+    --background: #292929;
+    --background-element: #424242;
+    --background-transparent: #2c2c2ccc;
+    --shadow: rgba(25, 25, 25, 0.7);
+    --svg-color: brightness(0) saturate(100%) invert(100%) sepia(55%) saturate(23%) hue-rotate(236deg) brightness(108%) contrast(92%);
 }
 
 .light {
-    --color: #2d1a0a;
-    --background: rgba(242, 228, 201, 0.9);
-    --background-element: rgba(232, 213, 177, 0.92);
-    --background-transparent: rgba(231, 210, 173, 0.8);
-    --background-deep: #f0d7ab;
-    --shadow: rgba(141, 106, 60, 0.25);
-    --svg-color: brightness(0) saturate(100%) invert(10%) sepia(18%) saturate(1025%) hue-rotate(354deg) brightness(89%) contrast(92%);
+    --color: #151515;
+    --background: rgb(245, 245, 245);
+    --background-element: #c2c2c2;
+    --background-transparent: rgba(204, 204, 204, 0.8);
+    --shadow: rgba(208, 208, 208, 0.7);
+    --svg-color: brightness(0) saturate(100%) invert(0%) sepia(5%) saturate(1719%) hue-rotate(357deg) brightness(94%) contrast(84%);
 }
