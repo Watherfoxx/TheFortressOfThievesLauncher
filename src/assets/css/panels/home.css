@@ -277,6 +277,14 @@
     font-weight: bolder;
     padding: 0 1.5rem;
     pointer-events: none;
+    transition: background 0.3s ease, color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.play-elements:hover .play-btn {
+    background: var(--element-color);
+    color: var(--background);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.35);
 }
 
 .instance-select {
