@@ -280,7 +280,8 @@
     transition: background 0.3s ease, color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.play-instance:hover .play-btn {
+
+.play-elements:hover .play-btn {
     background: var(--element-color);
     color: var(--background);
     transform: translateY(-2px);
