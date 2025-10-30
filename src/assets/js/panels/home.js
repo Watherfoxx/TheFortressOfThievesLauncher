@@ -7,8 +7,6 @@ import '../utils/downloader-retry.js'
 
 const { Launch } = require('minecraft-java-core')
 const { shell, ipcRenderer } = require('electron')
-const fs = require('fs')
-const path = require('path')
 
 class Home {
     static id = "home";
@@ -243,15 +241,11 @@ class Home {
         let infoStarting = document.querySelector(".info-starting-game-text")
         let progressBar = document.querySelector('.progress-bar')
 
-        const baseDataPath = path.resolve(`${await appdata()}/${process.platform == 'darwin' ? this.config.dataDirectory : `.${this.config.dataDirectory}`}`)
-
-        this.distantHorizonsNormalized = false
-
         let opt = {
             url: options.url,
             authenticator: authenticator,
             timeout: 10000,
-            path: baseDataPath,
+            path: `${await appdata()}/${process.platform == 'darwin' ? this.config.dataDirectory : `.${this.config.dataDirectory}`}`,
             instance: options.name,
             version: options.loadder.minecraft_version,
             detached: configClient.launcher_config.closeLauncher == "close-all" ? false : true,
@@ -297,12 +291,9 @@ class Home {
                 '-XX:+UseStringDeduplication'
             ]
         }
-
-
+         
+        
         console.log(opt);
-
-        this.normalizeDistantHorizonsData(baseDataPath, options.name)
-
         launch.Launch(opt);
 
         playInstanceBTN.style.display = "none"
@@ -347,10 +338,6 @@ class Home {
         });
 
         launch.on('data', (e) => {
-            if (!this.distantHorizonsNormalized && typeof e === 'string' && e.startsWith('Launching with arguments')) {
-                this.normalizeDistantHorizonsData(baseDataPath, options.name)
-                this.distantHorizonsNormalized = true
-            }
             progressBar.style.display = "none"
             if (configClient.launcher_config.closeLauncher == 'close-launcher') {
                 ipcRenderer.send("main-window-hide")
@@ -420,33 +407,6 @@ class Home {
         let day = date.getDate()
         let allMonth = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
         return { year: year, month: allMonth[month - 1], day: day }
-    }
-
-    normalizeDistantHorizonsData(basePath, instanceName) {
-        try {
-            const instancePath = path.join(basePath, 'instances', instanceName)
-            const dhPath = path.join(instancePath, 'Distant_Horizons_server_data')
-
-            if (!fs.existsSync(dhPath)) return
-
-            const entries = fs.readdirSync(dhPath, { withFileTypes: true })
-
-            for (const entry of entries) {
-                if (!entry.isDirectory()) continue
-
-                const encodedName = entry.name.replace(/\./g, '%2E')
-                if (encodedName === entry.name) continue
-
-                const source = path.join(dhPath, entry.name)
-                const target = path.join(dhPath, encodedName)
-
-                if (fs.existsSync(target)) continue
-
-                fs.renameSync(source, target)
-            }
-        } catch (error) {
-            console.warn('[Launcher] Unable to normalize Distant Horizons data directory names:', error)
-        }
     }
 }
 export default Home;
