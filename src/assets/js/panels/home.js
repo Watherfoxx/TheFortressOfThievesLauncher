@@ -275,10 +275,6 @@ class Home {
             },
 
             JVM_ARGS: [
-                //`-XX:MaxDirectMemorySize=${configClient.java_config.java_memory.max * 1024 / 2}M`,
-                //'-XX:MaxDirectMemorySize=6G',
-                //'-XX:+PrintFlagsFinal',
-                //'-Dio.netty.leakDetectionLevel=paranoid',
                 '-Dio.netty.maxDirectMemory=0',
                 '-XX:+UseG1GC',
                 '-XX:+ParallelRefProcEnabled',
