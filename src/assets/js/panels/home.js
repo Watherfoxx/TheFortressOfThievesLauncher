@@ -7,7 +7,6 @@ import '../utils/downloader-retry.js'
 
 const { Launch } = require('minecraft-java-core')
 const { shell, ipcRenderer } = require('electron')
-const fs = require('fs')
 const path = require('path')
 
 class Home {
@@ -248,9 +247,6 @@ class Home {
             : `.${this.config.dataDirectory}`
         const baseDataPath = path.join(await appdata(), dataDirectoryName)
 
-        this.clearDistantHorizonsNormalizationTimer()
-        this.distantHorizonsNormalizationAttempts = 0
-
         let opt = {
             url: options.url,
             authenticator: authenticator,
@@ -304,26 +300,6 @@ class Home {
 
 
         console.log(opt);
-
-        const normalizeDistantHorizonsData = () => {
-            const normalized = this.normalizeDistantHorizonsData(baseDataPath, options.name)
-            return normalized
-        }
-
-        normalizeDistantHorizonsData()
-
-        const MAX_NORMALIZATION_ATTEMPTS = 60
-        const NORMALIZATION_INTERVAL_MS = 5000
-
-        this.distantHorizonsNormalizationTimer = setInterval(() => {
-            const normalized = normalizeDistantHorizonsData()
-            this.distantHorizonsNormalizationAttempts += 1
-
-            if (normalized || this.distantHorizonsNormalizationAttempts >= MAX_NORMALIZATION_ATTEMPTS) {
-                this.clearDistantHorizonsNormalizationTimer()
-            }
-        }, NORMALIZATION_INTERVAL_MS)
-
         launch.Launch(opt);
 
         playInstanceBTN.style.display = "none"
@@ -368,9 +344,6 @@ class Home {
         });
 
         launch.on('data', (e) => {
-            if (typeof e === 'string' && e.startsWith('Launching with arguments')) {
-                normalizeDistantHorizonsData()
-            }
             progressBar.style.display = "none"
             if (configClient.launcher_config.closeLauncher == 'close-launcher') {
                 ipcRenderer.send("main-window-hide")
@@ -382,7 +355,6 @@ class Home {
         })
 
         launch.on('close', code => {
-            this.clearDistantHorizonsNormalizationTimer()
             if (configClient.launcher_config.closeLauncher == 'close-launcher') {
                 ipcRenderer.send("main-window-show")
             };
@@ -395,7 +367,6 @@ class Home {
         });
 
         launch.on('error', err => {
-            this.clearDistantHorizonsNormalizationTimer()
             let popupError = new popup()
 
             const userFacingMessage = err?.friendlyMessage || err?.error || err?.message || 'Une erreur inconnue est survenue.'
@@ -444,112 +415,5 @@ class Home {
         return { year: year, month: allMonth[month - 1], day: day }
     }
 
-    clearDistantHorizonsNormalizationTimer() {
-        if (this.distantHorizonsNormalizationTimer) {
-            clearInterval(this.distantHorizonsNormalizationTimer)
-            this.distantHorizonsNormalizationTimer = null
-        }
-        this.distantHorizonsNormalizationAttempts = 0
-    }
-
-    normalizeDistantHorizonsData(basePath, instanceName) {
-        let hasNormalized = false
-
-        try {
-            const instancePath = path.join(basePath, 'instances', instanceName)
-            const dhPath = path.join(instancePath, 'Distant_Horizons_server_data')
-
-            if (!fs.existsSync(dhPath)) return false
-
-            const walkAndNormalize = (directory) => {
-                const entries = fs.readdirSync(directory, { withFileTypes: true })
-
-                for (const entry of entries) {
-                    if (!entry.isDirectory()) continue
-
-                    const source = path.join(directory, entry.name)
-                    const normalizedName = this.getNormalizedDistantHorizonsSegment(entry.name)
-                    const needsRename = normalizedName && normalizedName !== entry.name
-
-                    if (needsRename) {
-                        const target = path.join(directory, normalizedName)
-
-                        if (fs.existsSync(target)) {
-                            this.mergeDistantHorizonsDirectory(source, target)
-                            this.removeEmptyDistantHorizonsDirectory(source)
-                            hasNormalized = true
-                            walkAndNormalize(target)
-                        } else {
-                            fs.renameSync(source, target)
-                            hasNormalized = true
-                            walkAndNormalize(target)
-                        }
-
-                        continue
-                    }
-
-                    walkAndNormalize(source)
-                }
-            }
-
-            walkAndNormalize(dhPath)
-        } catch (error) {
-            console.warn('[Launcher] Unable to normalize Distant Horizons data directory names:', error)
-        }
-
-        return hasNormalized
-    }
-
-    getNormalizedDistantHorizonsSegment(name) {
-        let decodedName = name
-
-        try {
-            decodedName = decodeURIComponent(name)
-        } catch (error) {
-            decodedName = name
-        }
-
-        const normalized = decodedName.replace(/\./g, '%2E')
-        return normalized
-    }
-
-    mergeDistantHorizonsDirectory(sourceDir, targetDir) {
-        try {
-            const entries = fs.readdirSync(sourceDir, { withFileTypes: true })
-
-            for (const entry of entries) {
-                const sourcePath = path.join(sourceDir, entry.name)
-                const targetPath = path.join(targetDir, entry.name)
-
-                if (entry.isDirectory()) {
-                    if (!fs.existsSync(targetPath)) {
-                        fs.renameSync(sourcePath, targetPath)
-                    } else {
-                        this.mergeDistantHorizonsDirectory(sourcePath, targetPath)
-                        this.removeEmptyDistantHorizonsDirectory(sourcePath)
-                    }
-                } else {
-                    if (!fs.existsSync(targetPath)) {
-                        fs.renameSync(sourcePath, targetPath)
-                    }
-                }
-            }
-        } catch (error) {
-            console.warn('[Launcher] Unable to merge Distant Horizons data directory contents:', error)
-        }
-    }
-
-    removeEmptyDistantHorizonsDirectory(directory) {
-        try {
-            if (!fs.existsSync(directory)) return
-
-            const remainingEntries = fs.readdirSync(directory)
-            if (remainingEntries.length === 0) {
-                fs.rmdirSync(directory)
-            }
-        } catch (error) {
-            console.warn('[Launcher] Unable to clean up Distant Horizons directory placeholder:', error)
-        }
-    }
 }
 export default Home;
