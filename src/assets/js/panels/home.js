@@ -8,7 +8,6 @@ import '../utils/downloader-retry.js'
 const { Launch } = require('minecraft-java-core')
 const { shell, ipcRenderer } = require('electron')
 const path = require('path')
-const crypto = require('crypto')
 
 class Home {
     static id = "home";
@@ -237,7 +236,6 @@ class Home {
         let instance = await config.getInstanceList()
         let authenticator = await this.db.readData('accounts', configClient.account_selected)
         let options = instance.find(i => i.name == configClient.instance_selct)
-        const instanceFolderName = this.getInstanceFolderName(options)
 
         let playInstanceBTN = document.querySelector('.play-instance')
         let infoStartingBOX = document.querySelector('.info-starting-game')
@@ -254,7 +252,7 @@ class Home {
             authenticator: authenticator,
             timeout: 10000,
             path: baseDataPath,
-            instance: instanceFolderName,
+            instance: options.name,
             version: options.loadder.minecraft_version,
             detached: configClient.launcher_config.closeLauncher == "close-all" ? false : true,
             downloadFileMultiple: configClient.launcher_config.download_multi,
@@ -300,7 +298,7 @@ class Home {
             ]
         }
 
-        console.log(`[Launcher] Selected instance: "${options.name}" -> folder: "${instanceFolderName}"`)
+
         console.log(opt);
         launch.Launch(opt);
 
@@ -406,24 +404,6 @@ class Home {
             new logger(pkg.name, '#7289da');
             console.error(err);
         });
-    }
-
-    getInstanceFolderName(options) {
-        const normalizedName = (options?.name || 'instance')
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '')
-            .slice(0, 24)
-
-        const version = options?.loadder?.minecraft_version || 'unknown'
-        const uniqueSource = `${options?.name || ''}|${version}`
-        const hash = crypto
-            .createHash('sha1')
-            .update(uniqueSource)
-            .digest('hex')
-            .slice(0, 8)
-
-        return `${normalizedName || 'instance'}-${hash}`
     }
 
     getdate(e) {
