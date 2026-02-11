@@ -35,19 +35,12 @@
     font-size: inherit;
     font-weight: bold;
     margin: 15px 10px;
-    transition: background 0.3s ease, color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.connect:hover {
-    background: var(--element-color);
-    color: var(--background);
-    transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.35);
 }
 
 .input-login .email,
 .input-login .password,
 .A2F {
+    font-family: 'Poppins';
     color: var(--color);
     background: none;
     border: solid 2px var(--element-color);

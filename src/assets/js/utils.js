@@ -1,6 +1,6 @@
- /**
+/**
  * @author Luuxis
- * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
+ * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
  */
 
 const { ipcRenderer } = require('electron')
@@ -14,45 +14,6 @@ import logger from './utils/logger.js';
 import popup from './utils/popup.js';
 import { skin2D } from './utils/skin.js';
 import slider from './utils/slider.js';
-
-const DEFAULT_SKIN_PATH = './assets/images/default/steve.png';
-
-async function resolveSkinURL(accountData) {
-    const fallbackURL = DEFAULT_SKIN_PATH;
-
-    if (!accountData?.name) return fallbackURL;
-
-    const explicitSkinURL = accountData?.meta?.textures?.SKIN?.url;
-    if (explicitSkinURL) return explicitSkinURL;
-
-    const encodedName = encodeURIComponent(accountData.name);
-    const remoteURL = `https://mc-heads.net/avatar/${encodedName}`;
-
-    const hasRemoteSkin = await verifyRemoteSkin(remoteURL);
-    return hasRemoteSkin ? remoteURL : fallbackURL;
-}
-
-async function verifyRemoteSkin(url) {
-    if (typeof Image !== 'undefined') {
-        return await new Promise(resolve => {
-            const image = new Image();
-            image.onload = () => resolve(true);
-            image.onerror = () => resolve(false);
-            image.src = url;
-        });
-    }
-
-    if (typeof fetch === 'function') {
-        try {
-            const response = await fetch(url, { method: 'GET' });
-            return response.ok;
-        } catch (error) {
-            return false;
-        }
-    }
-
-    return false;
-}
 
 async function setBackground(theme) {
     if (typeof theme == 'undefined') {
@@ -89,8 +50,13 @@ async function appdata() {
 }
 
 async function addAccount(data) {
-    let skinURL = await resolveSkinURL(data);
+    let skinURL;
+
+    skinURL = `https://mc-heads.net/avatar/${encodeURIComponent(data.name)}`;
     data.skinURL = skinURL;
+
+    // Appliquer l'URL du skin à l'élément .player-head
+    document.querySelector(".player-head").style.backgroundImage = skinURL ? `url(${skinURL})` : '';
     let div = document.createElement("div");
     div.classList.add("account");
     div.id = data.ID;
@@ -108,22 +74,19 @@ async function addAccount(data) {
 }
 
 async function accountSelect(data) {
-    if (!data) return;
-
     let account = document.getElementById(`${data.ID}`);
     let activeAccount = document.querySelector('.account-select');
 
     if (activeAccount) activeAccount.classList.toggle('account-select');
-    if (account) account.classList.add('account-select');
+    account.classList.add('account-select');
+    
+    let skinURL;
 
-    let skinURL = await resolveSkinURL(data);
+    skinURL = `https://mc-heads.net/avatar/${encodeURIComponent(data.name)}`;
     data.skinURL = skinURL;
 
     // Appliquer l'URL du skin à l'élément .player-head
-    let playerHead = document.querySelector(".player-head");
-    if (playerHead) playerHead.style.backgroundImage = skinURL ? `url(${skinURL})` : '';
-
-    document.dispatchEvent(new CustomEvent('launcher-account-changed', { detail: data }));
+    document.querySelector(".player-head").style.backgroundImage = skinURL ? `url(${skinURL})` : '';
 }
 
 

@@ -1,14 +1,11 @@
 /**
  * @author Luuxis
- * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
+ * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
  */
 import { config, database, logger, changePanel, appdata, setStatus, pkg, popup } from '../utils.js'
-import '../utils/downloader-retry.js'
 
 const { Launch } = require('minecraft-java-core')
 const { shell, ipcRenderer } = require('electron')
-const path = require('path')
-const crypto = require('crypto')
 
 class Home {
     static id = "home";
@@ -30,6 +27,7 @@ class Home {
                 blockNews.classList.add('news-block');
                 blockNews.innerHTML = `
                     <div class="news-header">
+                        <img class="server-status-icon" src="assets/images/icon.png">
                         <div class="header-text">
                             <div class="title">Aucun news n'ai actuellement disponible.</div>
                         </div>
@@ -55,8 +53,10 @@ class Home {
                                 <div class="title">${News.title}</div>
                             </div>
                             <div class="date">
-                                <div class="day">${date.day}</div>
-                                <div class="month">${date.month}</div>
+                                <div class="day">${date.day} </div>
+                                <span class="space"> </span>
+                                <div class="month">${date.month} </div>
+                                <span class="space"> </span>
                                 <div class="year">${date.year}</div>
                             </div>
                         </div>
@@ -74,6 +74,7 @@ class Home {
             blockNews.classList.add('news-block');
             blockNews.innerHTML = `
                 <div class="news-header">
+                        <img class="server-status-icon" src="assets/images/icon.png">
                         <div class="header-text">
                             <div class="title">Error.</div>
                         </div>
@@ -102,6 +103,21 @@ class Home {
         });
     }
 
+    async instanceCheck() {
+        const configClient = await this.db.readData('configClient');
+        const auth = await this.db.readData('accounts', configClient.account_selected);
+        const instancesList = await config.getInstanceList();
+        const instanceSelect = configClient?.instance_selct;
+    
+        if (instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length === 1) {
+            document.querySelector('.instance-select').style.display = 'none';
+            document.querySelector('.play-instance').style.paddingRight = '0';
+        }
+    
+        // console.log(`Nombre d'instances visibles par le joueur : ${instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length}`);
+    }    
+
+
     async instancesSelect() {
         let configClient = await this.db.readData('configClient')
         let auth = await this.db.readData('accounts', configClient.account_selected)
@@ -112,64 +128,37 @@ class Home {
         let instancePopup = document.querySelector('.instance-popup')
         let instancesListPopup = document.querySelector('.instances-List')
         let instanceCloseBTN = document.querySelector('.close-popup')
-        let instanceSelector = document.querySelector('.instance-select')
-
-        const toggleInstanceSelector = (shouldDisplay) => {
-            if (!instanceSelector || !instanceBTN) return
-            if (shouldDisplay) {
-                instanceSelector.style.display = 'flex'
-                instanceBTN.style.paddingRight = ''
-            } else {
-                instanceSelector.style.display = 'none'
-                instanceBTN.style.paddingRight = '0'
-            }
+        if (instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length === 1) {
+            document.querySelector('.instance-select').style.display = 'none'
+            instanceBTN.style.paddingRight = '0'
         }
+        console.log(`Nombre d'instances visibles par le joueur : ${instancesList.filter(i => !i.whitelistActive || (i.whitelistActive && i.whitelist.includes(auth?.name))).length}`)
+        ;
 
-        const getAccessibleInstances = (accountName) => {
-            return instancesList.filter(instance => {
-                if (!instance.whitelistActive) return true
-                return instance.whitelist?.includes(accountName)
-            })
-        }
-
-        const selectFallbackInstance = (accessibleInstances) => {
-            return accessibleInstances.find(instance => instance.whitelistActive == false) || accessibleInstances[0]
-        }
-
-        const refreshInstanceAccess = async (event) => {
+        if (!instanceSelect) {
+            let newInstanceSelect = instancesList.find(i => i.whitelistActive == false)
             let configClient = await this.db.readData('configClient')
-            let currentAuth = event?.detail || await this.db.readData('accounts', configClient.account_selected)
-            let accessibleInstances = getAccessibleInstances(currentAuth?.name)
-
-            toggleInstanceSelector(accessibleInstances.length > 1)
-
-            let selectedInstance = instancesList.find(instance => instance.name == configClient?.instance_selct)
-
-            if (!selectedInstance || !accessibleInstances.some(instance => instance.name == selectedInstance.name)) {
-                let fallbackInstance = selectFallbackInstance(accessibleInstances)
-
-                if (fallbackInstance) {
-                    configClient.instance_selct = fallbackInstance.name
-                    instanceSelect = fallbackInstance.name
-                    await this.db.updateData('configClient', configClient)
-                    await setStatus(fallbackInstance.status)
-                } else {
-                    configClient.instance_selct = null
-                    instanceSelect = null
-                    await this.db.updateData('configClient', configClient)
-                    await setStatus(null)
-                }
-            } else {
-                instanceSelect = selectedInstance.name
-                await setStatus(selectedInstance.status)
-            }
-
-            auth = currentAuth
+            configClient.instance_selct = newInstanceSelect.name
+            instanceSelect = newInstanceSelect.name
+            await this.db.updateData('configClient', configClient)
         }
 
-        await refreshInstanceAccess()
-
-        document.addEventListener('launcher-account-changed', refreshInstanceAccess)
+        for (let instance of instancesList) {
+            if (instance.whitelistActive) {
+                let whitelist = instance.whitelist.find(whitelist => whitelist == auth?.name)
+                if (whitelist !== auth?.name) {
+                    if (instance.name == instanceSelect) {
+                        let newInstanceSelect = instancesList.find(i => i.whitelistActive == false)
+                        let configClient = await this.db.readData('configClient')
+                        configClient.instance_selct = newInstanceSelect.name
+                        instanceSelect = newInstanceSelect.name
+                        setStatus(newInstanceSelect.status)
+                        await this.db.updateData('configClient', configClient)
+                    }
+                }
+            } else console.log(`Initializing instance ${instance.name}...`)
+            if (instance.name == instanceSelect) setStatus(instance.status)
+        }
 
         instancePopup.addEventListener('click', async e => {
             let configClient = await this.db.readData('configClient')
@@ -183,7 +172,7 @@ class Home {
 
                 configClient.instance_selct = newInstanceSelect
                 await this.db.updateData('configClient', configClient)
-                instanceSelect = newInstanceSelect
+                instanceSelect = instancesList.filter(i => i.name == newInstanceSelect)
                 instancePopup.style.display = 'none'
                 let instance = await config.getInstanceList()
                 let options = instance.find(i => i.name == configClient.instance_selct)
@@ -193,19 +182,15 @@ class Home {
 
         instanceBTN.addEventListener('click', async e => {
             let configClient = await this.db.readData('configClient')
-            instanceSelect = configClient.instance_selct
-            let activeAuth = auth
-            if (!activeAuth) {
-                activeAuth = await this.db.readData('accounts', configClient.account_selected)
-                auth = activeAuth
-            }
+            let instanceSelect = configClient.instance_selct
+            let auth = await this.db.readData('accounts', configClient.account_selected)
 
             if (e.target.classList.contains('instance-select')) {
                 instancesListPopup.innerHTML = ''
                 for (let instance of instancesList) {
                     if (instance.whitelistActive) {
                         instance.whitelist.map(whitelist => {
-                            if (whitelist == activeAuth?.name) {
+                            if (whitelist == auth?.name) {
                                 if (instance.name == instanceSelect) {
                                     instancesListPopup.innerHTML += `<div id="${instance.name}" class="instance-elements active-instance">${instance.name}</div>`
                                 } else {
@@ -237,24 +222,18 @@ class Home {
         let instance = await config.getInstanceList()
         let authenticator = await this.db.readData('accounts', configClient.account_selected)
         let options = instance.find(i => i.name == configClient.instance_selct)
-        const instanceFolderName = this.getInstanceFolderName(options)
 
         let playInstanceBTN = document.querySelector('.play-instance')
         let infoStartingBOX = document.querySelector('.info-starting-game')
         let infoStarting = document.querySelector(".info-starting-game-text")
         let progressBar = document.querySelector('.progress-bar')
 
-        const dataDirectoryName = process.platform == 'darwin'
-            ? this.config.dataDirectory
-            : `.${this.config.dataDirectory}`
-        const baseDataPath = path.join(await appdata(), dataDirectoryName)
-
         let opt = {
             url: options.url,
             authenticator: authenticator,
             timeout: 10000,
-            path: baseDataPath,
-            instance: instanceFolderName,
+            path: `${await appdata()}/${process.platform == 'darwin' ? this.config.dataDirectory : `.${this.config.dataDirectory}`}`,
+            instance: options.name,
             version: options.loadder.minecraft_version,
             detached: configClient.launcher_config.closeLauncher == "close-all" ? false : true,
             downloadFileMultiple: configClient.launcher_config.download_multi,
@@ -283,6 +262,10 @@ class Home {
             },
 
             JVM_ARGS: [
+                //`-XX:MaxDirectMemorySize=${configClient.java_config.java_memory.max * 1024 / 2}M`,
+                //'-XX:MaxDirectMemorySize=6G',
+                //'-XX:+PrintFlagsFinal',
+                //'-Dio.netty.leakDetectionLevel=paranoid',
                 '-Dio.netty.maxDirectMemory=0',
                 '-XX:+UseG1GC',
                 '-XX:+ParallelRefProcEnabled',
@@ -299,8 +282,8 @@ class Home {
                 '-XX:+UseStringDeduplication'
             ]
         }
-
-        console.log(`[Launcher] Selected instance: "${options.name}" -> folder: "${instanceFolderName}"`)
+         
+        
         console.log(opt);
         launch.Launch(opt);
 
@@ -371,27 +354,9 @@ class Home {
         launch.on('error', err => {
             let popupError = new popup()
 
-            const userFacingMessage = err?.friendlyMessage || err?.error || err?.message || 'Une erreur inconnue est survenue.'
-            const extraDetails = []
-
-            if (err?.details && err.details !== userFacingMessage) {
-                extraDetails.push(err.details)
-            } else if (err?.message && err.message !== userFacingMessage) {
-                extraDetails.push(err.message)
-            }
-
-            if (err?.file) {
-                extraDetails.push(`Fichier : ${err.file}`)
-            }
-
-            const formattedDetails = extraDetails
-                .filter(Boolean)
-                .map(detail => `<br><small>${detail}</small>`)
-                .join('')
-
             popupError.openPopup({
                 title: 'Erreur',
-                content: `${userFacingMessage}${formattedDetails}`,
+                content: err.error,
                 color: 'red',
                 options: true
             })
@@ -404,26 +369,8 @@ class Home {
             playInstanceBTN.style.display = "flex"
             infoStarting.innerHTML = `Vérification`
             new logger(pkg.name, '#7289da');
-            console.error(err);
+            console.log(err);
         });
-    }
-
-    getInstanceFolderName(options) {
-        const normalizedName = (options?.name || 'instance')
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '')
-            .slice(0, 24)
-
-        const version = options?.loadder?.minecraft_version || 'unknown'
-        const uniqueSource = `${options?.name || ''}|${version}`
-        const hash = crypto
-            .createHash('sha1')
-            .update(uniqueSource)
-            .digest('hex')
-            .slice(0, 8)
-
-        return `${normalizedName || 'instance'}-${hash}`
     }
 
     getdate(e) {
@@ -434,6 +381,5 @@ class Home {
         let allMonth = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
         return { year: year, month: allMonth[month - 1], day: day }
     }
-
 }
 export default Home;

@@ -281,10 +281,6 @@
     color: var(--color);
 }
 
-.java-path-txt {
-    font-size: 1rem;
-}
-
 .java-path-input-text {
     background: var(--shadow);
     border: none;
@@ -292,6 +288,10 @@
     padding: 0.5rem 1rem;
     border-radius: 15px;
     width: 50%;
+}
+
+.java-path-txt {
+    font-size: 15px;
 }
 
 .java-path-input-file {
@@ -392,14 +392,8 @@
     border: 2px solid var(--color);
 }
 
-.theme-btn-auto {
-    background: var(--background);
-    color: var(--color);
-    border: 2px solid var(--color);
-}
-
 .active-theme {
-    border: 4px solid var(--element-color);
+    border: 2px solid var(--element-color);
 }
 
 .close-btn {
