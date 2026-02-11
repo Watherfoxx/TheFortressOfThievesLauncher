@@ -120,22 +120,28 @@
 .news-header {
     display: flex;
     justify-content: space-between;
-    padding: 1rem 1.5rem;
     align-items: center;
+    gap: 1.5rem;
+    padding: 1rem 1.5rem;
 }
 
-.space {
-    margin-right: 5px;
+.header-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
 }
 
 .header-text .title {
-    font-size: 1.5rem;
+    font-size: 2rem;
     text-align: left;
+    text-decoration: none;
 }
 
 .news-header .date {
     display: flex;
     flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .news-content .bbWrapper {
@@ -260,6 +266,8 @@
     border-radius: 15px;
     height: 3.2rem;
     padding-right: 1.9rem;
+    overflow: hidden;
+    transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .play-btn {
@@ -271,6 +279,22 @@
     font-weight: bolder;
     padding: 0 1.5rem;
     pointer-events: none;
+    transition: color 0.3s ease;
+}
+
+.play-elements:hover .play-instance {
+    background: var(--element-color);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.35);
+}
+
+.play-elements:hover .play-btn {
+    color: var(--background);
+}
+
+.play-elements:hover .instance-select {
+    background: var(--background);
+    color: var(--element-color);
 }
 
 .instance-select {
@@ -287,6 +311,7 @@
     border-radius: 15px;
     padding: 0 0.5rem;
     cursor: pointer;
+    transition: background 0.3s ease, color 0.3s ease;
 }
 
 .instance-select:before {

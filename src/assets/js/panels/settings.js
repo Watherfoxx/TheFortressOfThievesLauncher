@@ -1,6 +1,6 @@
 /**
  * @author Luuxis
- * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
+ * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
  */
 
 import { changePanel, accountSelect, database, Slider, config, setStatus, popup, appdata, setBackground } from '../utils.js'
@@ -48,56 +48,75 @@ class Settings {
 
     accounts() {
         document.querySelector('.accounts-list').addEventListener('click', async e => {
-            let popupAccount = new popup()
             try {
-                let id = e.target.id
-                if (e.target.classList.contains('account')) {
+                const deleteButton = e.target.closest('.delete-profile');
+                if (deleteButton) {
+                    const popupAccount = new popup();
                     popupAccount.openPopup({
                         title: 'Connexion',
                         content: 'Veuillez patienter...',
                         color: 'var(--color)'
                     })
 
-                    if (id == 'add') {
-                        document.querySelector('.cancel-home').style.display = 'inline'
-                        return changePanel('login')
-                    }
-
-                    let account = await this.db.readData('accounts', id);
-                    let configClient = await this.setInstance(account);
-                    await accountSelect(account);
-                    configClient.account_selected = account.ID;
-                    return await this.db.updateData('configClient', configClient);
-                }
-
-                if (e.target.classList.contains("delete-profile")) {
-                    popupAccount.openPopup({
-                        title: 'Connexion',
-                        content: 'Veuillez patienter...',
-                        color: 'var(--color)'
-                    })
+                    const id = deleteButton.id;
                     await this.db.deleteData('accounts', id);
                     let deleteProfile = document.getElementById(`${id}`);
                     let accountListElement = document.querySelector('.accounts-list');
-                    accountListElement.removeChild(deleteProfile);
+                    if (deleteProfile) accountListElement.removeChild(deleteProfile);
 
-                    if (accountListElement.children.length == 1) return changePanel('login');
+                    if (accountListElement.children.length == 1) {
+                        popupAccount.closePopup();
+                        return changePanel('login');
+                    }
 
                     let configClient = await this.db.readData('configClient');
 
                     if (configClient.account_selected == id) {
                         let allAccounts = await this.db.readAllData('accounts');
-                        configClient.account_selected = allAccounts[0].ID
-                        accountSelect(allAccounts[0]);
-                        let newInstanceSelect = await this.setInstance(allAccounts[0]);
-                        configClient.instance_selct = newInstanceSelect.instance_selct
-                        return await this.db.updateData('configClient', configClient);
+                        let firstAccount = allAccounts[0];
+
+                        if (firstAccount) {
+                            configClient.account_selected = firstAccount.ID
+                            await accountSelect(firstAccount);
+                            let newInstanceSelect = await this.setInstance(firstAccount);
+                            configClient.instance_selct = newInstanceSelect.instance_selct
+                            await this.db.updateData('configClient', configClient);
+                        }
                     }
+
+                    return popupAccount.closePopup();
                 }
+
+                const accountElement = e.target.closest('.account');
+                if (!accountElement) return;
+
+                const id = accountElement.id;
+                const popupAccount = new popup();
+                popupAccount.openPopup({
+                    title: 'Connexion',
+                    content: 'Veuillez patienter...',
+                    color: 'var(--color)'
+                })
+
+                if (id == 'add') {
+                    document.querySelector('.cancel-home').style.display = 'inline'
+                    popupAccount.closePopup();
+                    return changePanel('login')
+                }
+
+                let account = await this.db.readData('accounts', id);
+                if (!account) {
+                    popupAccount.closePopup();
+                    return;
+                }
+
+                let configClient = await this.setInstance(account);
+                await accountSelect(account);
+                configClient.account_selected = account.ID;
+                await this.db.updateData('configClient', configClient);
+                popupAccount.closePopup();
             } catch (err) {
                 console.error(err)
-            } finally {
-                popupAccount.closePopup();
             }
         })
     }
@@ -252,9 +271,11 @@ class Settings {
         })
 
         let themeBox = document.querySelector(".theme-box");
-        let theme = configClient?.launcher_config?.theme || "light";
+        let theme = configClient?.launcher_config?.theme || "auto";
 
-        if (theme == "dark") {
+        if (theme == "auto") {
+            document.querySelector('.theme-btn-auto').classList.add('active-theme');
+        } else if (theme == "dark") {
             document.querySelector('.theme-btn-sombre').classList.add('active-theme');
         } else if (theme == "light") {
             document.querySelector('.theme-btn-clair').classList.add('active-theme');
@@ -266,7 +287,11 @@ class Settings {
                 if (e.target.classList.contains('active-theme')) return
                 activeTheme?.classList.remove('active-theme');
 
-                if (e.target.classList.contains('theme-btn-sombre')) {
+                if (e.target.classList.contains('theme-btn-auto')) {
+                    setBackground();
+                    theme = "auto";
+                    e.target.classList.add('active-theme');
+                } else if (e.target.classList.contains('theme-btn-sombre')) {
                     setBackground(true);
                     theme = "dark";
                     e.target.classList.add('active-theme');
