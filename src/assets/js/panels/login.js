@@ -192,6 +192,22 @@ class Login {
     }
 
     async saveData(connectionData) {
+        let popupLogin = new popup();
+        let accounts = await this.db.readAllData('accounts');
+        let duplicateAccount = accounts.find(account => {
+            if (connectionData?.uuid && account?.uuid) return account.uuid === connectionData.uuid;
+            return account?.name?.toLowerCase() === connectionData?.name?.toLowerCase();
+        });
+
+        if (duplicateAccount) {
+            popupLogin.openPopup({
+                title: 'Erreur',
+                content: `Le compte ${duplicateAccount.name} est déjà ajouté sur le launcher.`,
+                options: true
+            });
+            return;
+        }
+
         let configClient = await this.db.readData('configClient');
         let account = await this.db.createData('accounts', connectionData)
         let instanceSelect = configClient.instance_selct
