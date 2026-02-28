@@ -7,10 +7,44 @@ import '../utils/downloader-retry.js'
 
 const { Launch } = require('minecraft-java-core')
 const { shell, ipcRenderer } = require('electron')
+const fs = require('fs')
 const path = require('path')
 
 class Home {
     static id = "home";
+
+    isMissingRuntimeDependency(error) {
+        const errorPayload = [
+            error?.friendlyMessage,
+            error?.error,
+            error?.message,
+            error?.details
+        ].filter(Boolean).join(' ')
+
+        return /(?:NoClassDefFoundError|ClassNotFoundException):\s*org(?:\.|\/)lwjgl/i.test(errorPayload)
+    }
+
+    async repairCorruptedRuntimeFiles(basePath, instanceName) {
+        const instancePath = path.join(basePath, instanceName)
+        const candidatePaths = [
+            path.join(instancePath, 'libraries', 'org', 'lwjgl'),
+            path.join(instancePath, 'loader')
+        ]
+
+        const deletedPaths = []
+        for (const candidatePath of candidatePaths) {
+            if (!fs.existsSync(candidatePath)) continue
+            await fs.promises.rm(candidatePath, { recursive: true, force: true })
+            deletedPaths.push(candidatePath)
+        }
+
+        return {
+            repaired: deletedPaths.length > 0,
+            deletedPaths,
+            instancePath
+        }
+    }
+
     async init(config) {
         this.config = config;
         this.db = new database();
@@ -367,6 +401,24 @@ class Home {
         });
 
         launch.on('error', err => {
+            const canRepairRuntime = this.isMissingRuntimeDependency(err)
+            if (canRepairRuntime) {
+                this.repairCorruptedRuntimeFiles(baseDataPath, options.name)
+                    .then(result => {
+                        if (!result.repaired) return
+                        new popup().openPopup({
+                            title: 'Réparation appliquée',
+                            content: `Des fichiers critiques ont été réparés (${result.deletedPaths.length}). Relancez le jeu pour retélécharger les dépendances manquantes.`,
+                            color: 'var(--color)',
+                            options: true
+                        })
+                        console.warn('[Repair] Missing LWJGL dependency detected. Removed runtime folders:', result.deletedPaths)
+                    })
+                    .catch(repairError => {
+                        console.error('[Repair] Failed to remove corrupted runtime folders:', repairError)
+                    })
+            }
+
             let popupError = new popup()
 
             const userFacingMessage = err?.friendlyMessage || err?.error || err?.message || 'Une erreur inconnue est survenue.'
