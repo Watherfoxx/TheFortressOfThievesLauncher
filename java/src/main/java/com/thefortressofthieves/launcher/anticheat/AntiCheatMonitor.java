@@ -2,7 +2,7 @@ package com.thefortressofthieves.launcher.anticheat;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -13,27 +13,36 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
 /**
- * Coordinates anti-cheat stack scanning and webhook notifications.
+ * Coordinates process and thread scans and sends webhook alerts when suspicious activity is detected.
  */
 public class AntiCheatMonitor {
     private static final String DEFAULT_WEBHOOK_URL = "https://discord.com/api/webhooks/1479979837920645391/gk-m5A21RWsqS5xR4y1DZgJJmrp-X8bKE8u6_Swc8O1ZPhRvq9uuhYvt8mbgxk910qkw";
     private static final int SCAN_INTERVAL_SECONDS = 10;
-    private static final long WEBHOOK_RATE_LIMIT_MILLIS = TimeUnit.MINUTES.toMillis(1);
 
-    private final ThreadStackScanner threadStackScanner;
+    private final ProcessScanner processScanner;
+    private final ThreadScanner threadScanner;
     private final WebhookNotifier webhookNotifier;
     private final ScheduledExecutorService scheduler;
     private final Logger logger;
 
-    private volatile long lastWebhookSentAt;
-
+    /**
+     * Creates a monitor with scanner, notifier, and scheduler dependencies.
+     *
+     * @param processScanner scanner for suspicious processes.
+     * @param threadScanner scanner for suspicious classes.
+     * @param webhookNotifier notifier for webhook alerts.
+     * @param scheduler scheduler used for periodic scans.
+     * @param logger logger writing to local anti-cheat log.
+     */
     public AntiCheatMonitor(
-        ThreadStackScanner threadStackScanner,
+        ProcessScanner processScanner,
+        ThreadScanner threadScanner,
         WebhookNotifier webhookNotifier,
         ScheduledExecutorService scheduler,
         Logger logger
     ) {
-        this.threadStackScanner = threadStackScanner;
+        this.processScanner = processScanner;
+        this.threadScanner = threadScanner;
         this.webhookNotifier = webhookNotifier;
         this.scheduler = scheduler;
         this.logger = logger;
@@ -47,7 +56,8 @@ public class AntiCheatMonitor {
     public static AntiCheatMonitor start() {
         Logger logger = createLogger();
         AntiCheatMonitor monitor = new AntiCheatMonitor(
-            new ThreadStackScanner(),
+            new ProcessScanner(),
+            new ThreadScanner(),
             new WebhookNotifier(DEFAULT_WEBHOOK_URL),
             Executors.newSingleThreadScheduledExecutor(),
             logger
@@ -68,40 +78,24 @@ public class AntiCheatMonitor {
      * Runs one anti-cheat scan cycle.
      */
     public void scan() {
+        logger.info("Anti-cheat scan started.");
+
+        List<String> suspiciousProcesses = processScanner.scanSuspiciousProcesses();
+        List<String> suspiciousClasses = threadScanner.scanSuspiciousClasses();
+
+        if (suspiciousProcesses.isEmpty() && suspiciousClasses.isEmpty()) {
+            logger.info("No suspicious activity detected.");
+            return;
+        }
+
+        logger.warning("Suspicious processes detected: " + suspiciousProcesses);
+        logger.warning("Suspicious classes detected: " + suspiciousClasses);
+
         try {
-            logger.info("Anti-cheat scan started.");
-
-            ThreadStackScanner.ScanResult scanResult = threadStackScanner.scan();
-            if (!scanResult.detected()) {
-                logger.info("No suspicious activity detected.");
-                return;
-            }
-
-            logger.warning("[ANTI-CHEAT DETECTION]\n\nInjected classes detected.\n\nClasses:\n"
-                + String.join("\n", scanResult.suspiciousClasses())
-                + "\n\nThreads:\n"
-                + scanResult.suspiciousThreads()
-                + "\n\nTime:\n"
-                + Instant.now());
-
-            scanResult.suspiciousFrames().forEach(frame ->
-                logger.warning("Suspicious frame => thread=\"" + frame.threadName()
-                    + "\", class=" + frame.className()
-                    + ", stack=" + frame.stackLine())
-            );
-
-            if (canSendWebhookNow()) {
-                int responseCode = webhookNotifier.sendAlert(
-                    scanResult.suspiciousClasses(),
-                    scanResult.suspiciousThreads()
-                );
-                lastWebhookSentAt = System.currentTimeMillis();
-                logger.info("Webhook response: " + responseCode);
-            } else {
-                logger.info("Webhook skipped due to rate limit (max once per minute).");
-            }
-        } catch (Exception ex) {
-            logger.log(Level.WARNING, "Anti-cheat scan failed but launcher continues.", ex);
+            webhookNotifier.sendAlert(suspiciousProcesses, suspiciousClasses);
+            logger.info("Webhook alert sent successfully.");
+        } catch (IOException ex) {
+            logger.log(Level.WARNING, "Failed to send webhook alert.", ex);
         }
     }
 
@@ -109,17 +103,8 @@ public class AntiCheatMonitor {
      * Stops periodic scanning and releases scheduler resources.
      */
     public void stop() {
-        try {
-            scheduler.shutdownNow();
-        } catch (Exception ex) {
-            logger.log(Level.WARNING, "Failed to stop anti-cheat scheduler cleanly.", ex);
-        }
+        scheduler.shutdownNow();
         logger.info("AntiCheatMonitor stopped.");
-    }
-
-    private boolean canSendWebhookNow() {
-        long now = System.currentTimeMillis();
-        return now - lastWebhookSentAt >= WEBHOOK_RATE_LIMIT_MILLIS;
     }
 
     private static Logger createLogger() {
