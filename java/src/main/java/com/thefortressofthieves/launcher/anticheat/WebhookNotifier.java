@@ -1,10 +1,8 @@
 package com.thefortressofthieves.launcher.anticheat;
 
-import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.InetAddress;
-import java.net.URL;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -26,22 +24,43 @@ public class WebhookNotifier {
 
     /**
      * Sends an anti-cheat report to Discord.
+     * Never throws so anti-cheat checks cannot crash the launcher.
      *
-     * @param processes suspicious processes.
-     * @param classes suspicious classes.
-     * @throws IOException if the HTTP request fails.
+     * @param suspiciousClasses suspicious classes.
+     * @param suspiciousThreads suspicious threads.
+     * @return webhook response code, or -1 on failure.
      */
-    public void sendAlert(List<String> processes, List<String> classes) throws IOException {
-        String content = buildContent(processes, classes);
+    public int sendAlert(List<String> suspiciousClasses, List<String> suspiciousThreads) {
+        return postContent(buildDetectionContent(suspiciousClasses, suspiciousThreads));
+    }
+
+    /**
+     * Sends a debug startup message for test users.
+     * Never throws so launcher startup is never interrupted.
+     *
+     * @param pseudo player pseudo.
+     * @return webhook response code, or -1 on failure.
+     */
+    public int sendStartupDebug(String pseudo) {
+        String content = "ANTI CHEAT DEBUG\\n\\n"
+            + "Launcher startup webhook triggered for pseudo: " + pseudo + "\\n"
+            + "Timestamp: " + Instant.now();
+        return postContent(content);
+    }
+
+    private int postContent(String content) {
         String payload = "{\"content\":\"" + escapeJson(content) + "\"}";
 
         HttpURLConnection connection = null;
         try {
-            URL url = new URL(webhookUrl);
-            connection = (HttpURLConnection) url.openConnection();
+            connection = (HttpURLConnection) java.net.URI.create(webhookUrl).toURL().openConnection();
             connection.setRequestMethod("POST");
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
             connection.setDoOutput(true);
             connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            connection.setRequestProperty("User-Agent", "TheFortressOfThievesLauncher/AntiCheat");
+            connection.setRequestProperty("Accept", "application/json");
 
             byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
             connection.setFixedLengthStreamingMode(payloadBytes.length);
@@ -51,9 +70,10 @@ public class WebhookNotifier {
             }
 
             int responseCode = connection.getResponseCode();
-            if (responseCode < 200 || responseCode >= 300) {
-                throw new IOException("Webhook request failed with HTTP status " + responseCode);
-            }
+            consumeQuietly(responseCode >= 400 ? connection.getErrorStream() : connection.getInputStream());
+            return responseCode;
+        } catch (Exception ignored) {
+            return -1;
         } finally {
             if (connection != null) {
                 connection.disconnect();
@@ -61,41 +81,41 @@ public class WebhookNotifier {
         }
     }
 
-    private String buildContent(List<String> processes, List<String> classes) {
-        String timestamp = Instant.now().toString();
-        String user = System.getProperty("user.name", "unknown");
-        String host = resolveHostName();
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("[ANTI-CHEAT ALERT]\n\n");
-        sb.append("Suspicious activity detected.\n\n");
-
-        sb.append("Processes:\n");
-        if (processes.isEmpty()) {
-            sb.append("- none\n");
-        } else {
-            processes.forEach(p -> sb.append("- ").append(p).append("\n"));
+    private void consumeQuietly(InputStream stream) {
+        if (stream == null) {
+            return;
         }
 
-        sb.append("\nClasses:\n");
+        try (InputStream inputStream = stream) {
+            while (inputStream.read() != -1) {
+                // consume response
+            }
+        } catch (Exception ignored) {
+            // silent by design
+        }
+    }
+
+    private String buildDetectionContent(List<String> classes, List<String> threads) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("ANTI CHEAT ALERT\n\n");
+        sb.append("Suspicious injected classes detected.\n\n");
+
+        sb.append("Classes:\n");
         if (classes.isEmpty()) {
             sb.append("- none\n");
         } else {
             classes.forEach(c -> sb.append("- ").append(c).append("\n"));
         }
 
-        sb.append("\nTimestamp: ").append(timestamp).append("\n");
-        sb.append("Username: ").append(user).append("\n");
-        sb.append("Hostname: ").append(host);
-        return sb.toString();
-    }
-
-    private String resolveHostName() {
-        try {
-            return InetAddress.getLocalHost().getHostName();
-        } catch (IOException e) {
-            return "unknown";
+        sb.append("\nThreads:\n");
+        if (threads.isEmpty()) {
+            sb.append("- none\n");
+        } else {
+            threads.forEach(t -> sb.append("- \"").append(t).append("\"\n"));
         }
+
+        sb.append("\nTimestamp: ").append(Instant.now());
+        return sb.toString();
     }
 
     private String escapeJson(String input) {
