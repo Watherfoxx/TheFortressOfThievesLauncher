@@ -6,7 +6,7 @@ import { config, database, logger, changePanel, appdata, setStatus, pkg, popup }
 import '../utils/downloader-retry.js'
 
 const { Launch } = require('minecraft-java-core')
-const { shell, ipcRenderer } = require('electron')
+const { shell, ipcRenderer, systemPreferences } = require('electron')
 const fs = require('fs')
 const path = require('path')
 
