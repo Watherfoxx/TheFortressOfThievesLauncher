@@ -57,10 +57,10 @@ class Home {
     async ensureMicrophoneAccessForMac() {
         if (process.platform !== 'darwin') return true
 
-        const currentStatus = systemPreferences.getMediaAccessStatus('microphone')
+        const currentStatus = await ipcRenderer.invoke('macos-microphone-access-status')
         if (currentStatus === 'granted') return true
 
-        const granted = await systemPreferences.askForMediaAccess('microphone')
+        const granted = await ipcRenderer.invoke('macos-request-microphone-access')
         if (!granted) {
             alert("Le microphone est requis pour le chat vocal. Autorisez l'accès au microphone dans Réglages Système > Confidentialité et sécurité > Microphone, puis relancez le jeu.")
             return false

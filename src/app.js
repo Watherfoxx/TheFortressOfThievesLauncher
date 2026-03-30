@@ -3,7 +3,7 @@
  * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
  */
 
-const { app, ipcMain, nativeTheme } = require('electron');
+const { app, ipcMain, nativeTheme, systemPreferences } = require('electron');
 const { Microsoft } = require('minecraft-java-core');
 const { autoUpdater } = require('electron-updater')
 
@@ -68,6 +68,16 @@ ipcMain.handle('is-dark-theme', (_, theme) => {
     if (theme === 'dark') return true
     if (theme === 'light') return false
     return nativeTheme.shouldUseDarkColors;
+})
+
+ipcMain.handle('macos-microphone-access-status', () => {
+    if (process.platform !== 'darwin') return 'granted'
+    return systemPreferences.getMediaAccessStatus('microphone')
+})
+
+ipcMain.handle('macos-request-microphone-access', async () => {
+    if (process.platform !== 'darwin') return true
+    return await systemPreferences.askForMediaAccess('microphone')
 })
 
 app.on('window-all-closed', () => app.quit());
