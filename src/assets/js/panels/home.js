@@ -6,7 +6,7 @@ import { config, database, logger, changePanel, appdata, setStatus, pkg, popup }
 import '../utils/downloader-retry.js'
 
 const { Launch } = require('minecraft-java-core')
-const { shell, ipcRenderer } = require('electron')
+const { shell, ipcRenderer, systemPreferences } = require('electron')
 const fs = require('fs')
 const path = require('path')
 
@@ -52,6 +52,21 @@ class Home {
         this.socialLick()
         this.instancesSelect()
         document.querySelector('.settings-btn').addEventListener('click', e => changePanel('settings'))
+    }
+
+    async ensureMicrophoneAccessForMac() {
+        if (process.platform !== 'darwin') return true
+
+        const currentStatus = systemPreferences.getMediaAccessStatus('microphone')
+        if (currentStatus === 'granted') return true
+
+        const granted = await systemPreferences.askForMediaAccess('microphone')
+        if (!granted) {
+            alert("Le microphone est requis pour le chat vocal. Autorisez l'accès au microphone dans Réglages Système > Confidentialité et sécurité > Microphone, puis relancez le jeu.")
+            return false
+        }
+
+        return true
     }
 
     async news() {
@@ -265,6 +280,9 @@ class Home {
     }
 
     async startGame() {
+        const microphoneGranted = await this.ensureMicrophoneAccessForMac()
+        if (!microphoneGranted) return
+
         let launch = new Launch()
         let configClient = await this.db.readData('configClient')
         let instance = await config.getInstanceList()
