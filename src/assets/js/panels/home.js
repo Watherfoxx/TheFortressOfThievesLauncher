@@ -54,6 +54,21 @@ class Home {
         document.querySelector('.settings-btn').addEventListener('click', e => changePanel('settings'))
     }
 
+    async ensureMicrophoneAccessForMac() {
+        if (process.platform !== 'darwin') return true
+
+        const currentStatus = await ipcRenderer.invoke('macos-microphone-access-status')
+        if (currentStatus === 'granted') return true
+
+        const granted = await ipcRenderer.invoke('macos-request-microphone-access')
+        if (!granted) {
+            alert("Le microphone est requis pour le chat vocal. Autorisez l'accès au microphone dans Réglages Système > Confidentialité et sécurité > Microphone, puis relancez le jeu.")
+            return false
+        }
+
+        return true
+    }
+
     async news() {
         let newsElement = document.querySelector('.news-list');
         let news = await config.getNews().then(res => res).catch(err => false);
@@ -265,6 +280,9 @@ class Home {
     }
 
     async startGame() {
+        const microphoneGranted = await this.ensureMicrophoneAccessForMac()
+        if (!microphoneGranted) return
+
         let launch = new Launch()
         let configClient = await this.db.readData('configClient')
         let instance = await config.getInstanceList()

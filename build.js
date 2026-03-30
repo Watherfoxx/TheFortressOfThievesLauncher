@@ -93,6 +93,9 @@ class Index {
                     icon: "./app/assets/images/icon.icns",
                     category: "public.app-category.games",
                     identity: null,
+                    extendInfo: {
+                        NSMicrophoneUsageDescription: "Le chat vocal en jeu nécessite l'accès au microphone."
+                    },
                     target: [{
                         target: "dmg",
                         arch: "x64"
