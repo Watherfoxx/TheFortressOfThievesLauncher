@@ -83,7 +83,14 @@ const formatError = (error, file) => {
 
     if (typeof error === 'object') {
         const formatted = { ...error };
-        const originalMessage = formatted.error || formatted.message || formatted?.cause?.message || formatted.toString();
+        let originalMessage = formatted.error || formatted.message || formatted?.cause?.message || formatted.toString();
+        if (originalMessage === '[object Object]') {
+            try {
+                originalMessage = JSON.stringify(error);
+            } catch (e) {
+                // Keep default fallback message if serialization fails.
+            }
+        }
         const fallback = 'Une erreur inconnue est survenue lors du téléchargement.';
         const friendly = getFriendlyMessage(error);
 
@@ -120,6 +127,26 @@ const formatError = (error, file) => {
         error: error.toString(),
         file: file?.path
     };
+};
+
+const normalizeFileUrl = (fileUrl) => {
+    if (fileUrl === null || fileUrl === undefined) return fileUrl;
+
+    const rawUrl = fileUrl instanceof URL
+        ? fileUrl.toString()
+        : (typeof fileUrl === 'string' ? fileUrl : String(fileUrl));
+
+    // Keep existing percent-encoded bytes (%20, %2F, etc.) untouched while
+    // escaping literal '%' characters found in folder/file names.
+    const sanitizedUrl = rawUrl.replace(/%(?![0-9a-fA-F]{2})/g, '%25');
+
+    try {
+        return new URL(sanitizedUrl).toString();
+    } catch (error) {
+        // If URL parsing fails, keep the sanitized string to avoid throwing
+        // before fetch and let the regular error flow handle it.
+        return sanitizedUrl;
+    }
 };
 
 const patchDownloader = () => {
@@ -239,6 +266,8 @@ const patchDownloader = () => {
             }
 
             let bytesThisAttempt = 0;
+            let settled = false;
+            let stream = null;
             const writer = fs.createWriteStream(file.path, { flags: 'w', mode: 0o777 });
             const controller = new AbortController();
             activeControllers.add(controller);
@@ -257,7 +286,16 @@ const patchDownloader = () => {
             };
 
             const handleFailure = (error) => {
+                if (settled) return;
+                settled = true;
                 clearTimeout(timeoutId);
+                if (stream && typeof stream.destroy === 'function') {
+                    try {
+                        stream.destroy();
+                    } catch (e) {
+                        // Ignore stream destroy errors while unwinding a failed download.
+                    }
+                }
                 writer.destroy();
                 cleanupPartial();
                 activeControllers.delete(controller);
@@ -283,22 +321,29 @@ const patchDownloader = () => {
             };
 
             try {
-                const response = await fetch(file.url, { signal: controller.signal });
+                const response = await fetch(normalizeFileUrl(file.url), { signal: controller.signal });
                 clearTimeout(timeoutId);
 
                 if (!response.ok || !response.body) {
                     throw new Error(`Échec du téléchargement (${response.status} ${response.statusText})`);
                 }
 
-                const stream = toNodeStream(response.body);
+                stream = toNodeStream(response.body);
                 stream.on('data', (chunk) => {
+                    if (settled || writer.destroyed || writer.writableEnded) return;
                     bytesThisAttempt += chunk.length;
                     downloaded += chunk.length;
                     this.emit('progress', downloaded, size, file.type);
-                    writer.write(chunk);
+                    try {
+                        writer.write(chunk);
+                    } catch (error) {
+                        handleFailure(error);
+                    }
                 });
 
                 stream.on('end', () => {
+                    if (settled) return;
+                    settled = true;
                     writer.end();
                     activeControllers.delete(controller);
                     active = Math.max(0, active - 1);
