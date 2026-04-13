@@ -122,22 +122,6 @@ const formatError = (error, file) => {
     };
 };
 
-const normalizeFileUrl = (fileUrl) => {
-    if (typeof fileUrl !== 'string') return fileUrl;
-
-    // Keep existing percent-encoded bytes (%20, %2F, etc.) untouched while
-    // escaping literal '%' characters found in folder/file names.
-    const sanitizedUrl = fileUrl.replace(/%(?![0-9a-fA-F]{2})/g, '%25');
-
-    try {
-        return new URL(sanitizedUrl).toString();
-    } catch (error) {
-        // If URL parsing fails, keep the sanitized string to avoid throwing
-        // before fetch and let the regular error flow handle it.
-        return sanitizedUrl;
-    }
-};
-
 const patchDownloader = () => {
     if (Downloader.prototype.__fortressPatchedRetry) return;
 
@@ -299,7 +283,7 @@ const patchDownloader = () => {
             };
 
             try {
-                const response = await fetch(normalizeFileUrl(file.url), { signal: controller.signal });
+                const response = await fetch(file.url, { signal: controller.signal });
                 clearTimeout(timeoutId);
 
                 if (!response.ok || !response.body) {
