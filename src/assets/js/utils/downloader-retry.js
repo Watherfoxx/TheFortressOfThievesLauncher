@@ -157,32 +157,6 @@ const normalizeFileUrl = (fileUrl) => {
     }
 };
 
-const decodeSegment = (segment) => {
-    try {
-        return decodeURIComponent(segment);
-    } catch (error) {
-        return segment;
-    }
-};
-
-const encodeFilePathSafely = (filePath) => (
-    filePath
-        .split('/')
-        .map((segment) => encodeURIComponent(decodeSegment(segment)))
-        .join('/')
-);
-
-const buildFinalDownloadUrl = (file) => {
-    if (file?.url) return normalizeFileUrl(file.url);
-
-    if (typeof file?.baseUrl === 'string' && typeof file?.path === 'string') {
-        const safePath = encodeFilePathSafely(file.path);
-        return normalizeFileUrl(`${file.baseUrl}${safePath}`);
-    }
-
-    return normalizeFileUrl(file?.path);
-};
-
 const patchDownloader = () => {
     if (Downloader.prototype.__fortressPatchedRetry) return;
 
@@ -368,8 +342,7 @@ const patchDownloader = () => {
             };
 
             try {
-                const finalUrl = buildFinalDownloadUrl(file);
-                const response = await fetch(finalUrl, { signal: controller.signal });
+                const response = await fetch(normalizeFileUrl(file.url), { signal: controller.signal });
                 clearTimeout(timeoutId);
 
                 if (!response.ok || !response.body) {
