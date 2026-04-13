@@ -83,18 +83,8 @@ const formatError = (error, file) => {
 
     if (typeof error === 'object') {
         const formatted = { ...error };
-        let originalMessage = formatted.error || formatted.message || formatted?.cause?.message || formatted.toString();
-        if (originalMessage === '[object Object]') {
-            try {
-                originalMessage = JSON.stringify(error);
-            } catch (e) {
-                // Keep default fallback message if serialization fails.
-            }
-        }
+        const originalMessage = formatted.error || formatted.message || formatted?.cause?.message || formatted.toString();
         const fallback = 'Une erreur inconnue est survenue lors du téléchargement.';
-        if (originalMessage === '{}' || originalMessage === '[]') {
-            originalMessage = '';
-        }
         const friendly = getFriendlyMessage(error);
 
         if (friendly) {
@@ -130,31 +120,6 @@ const formatError = (error, file) => {
         error: error.toString(),
         file: file?.path
     };
-};
-
-const normalizeFileUrl = (fileUrl) => {
-    if (fileUrl === null || fileUrl === undefined) return fileUrl;
-
-    const sanitizePercent = (value) => value.replace(/%(?![0-9a-fA-F]{2})/g, '%25');
-
-    try {
-        const parsedUrl = fileUrl instanceof URL
-            ? new URL(fileUrl.toString())
-            : new URL(typeof fileUrl === 'string' ? fileUrl : String(fileUrl));
-
-        // Encode only stray '%' in the path so folders/files named with '%'
-        // are still requested correctly as `%25` on HTTP.
-        parsedUrl.pathname = sanitizePercent(parsedUrl.pathname);
-        return parsedUrl.toString();
-    } catch (error) {
-        const rawUrl = fileUrl instanceof URL
-            ? fileUrl.toString()
-            : (typeof fileUrl === 'string' ? fileUrl : String(fileUrl));
-
-        // Fallback for malformed values: sanitize the whole string rather than
-        // silently skipping files containing '%'.
-        return sanitizePercent(rawUrl);
-    }
 };
 
 const patchDownloader = () => {
@@ -249,24 +214,12 @@ const patchDownloader = () => {
         };
 
         let resolvePromise = null;
-        let rejectPromise = null;
-        let fatalError = null;
         const tryResolve = () => {
-            if (!resolvePromise || !rejectPromise) return;
-            if (hasFatalError) {
-                clearInterval(throughputInterval);
-                const rejecter = rejectPromise;
-                resolvePromise = null;
-                rejectPromise = null;
-                rejecter(fatalError || new Error('Échec du téléchargement.'));
-                return;
-            }
-
-            if (completed >= totalFiles && active === 0 && queue.length === 0) {
+            if (!resolvePromise) return;
+            if (hasFatalError || (completed >= totalFiles && active === 0 && queue.length === 0)) {
                 clearInterval(throughputInterval);
                 const resolver = resolvePromise;
                 resolvePromise = null;
-                rejectPromise = null;
                 resolver();
             }
         };
@@ -286,8 +239,6 @@ const patchDownloader = () => {
             }
 
             let bytesThisAttempt = 0;
-            let settled = false;
-            let stream = null;
             const writer = fs.createWriteStream(file.path, { flags: 'w', mode: 0o777 });
             const controller = new AbortController();
             activeControllers.add(controller);
@@ -306,16 +257,7 @@ const patchDownloader = () => {
             };
 
             const handleFailure = (error) => {
-                if (settled) return;
-                settled = true;
                 clearTimeout(timeoutId);
-                if (stream && typeof stream.destroy === 'function') {
-                    try {
-                        stream.destroy();
-                    } catch (e) {
-                        // Ignore stream destroy errors while unwinding a failed download.
-                    }
-                }
                 writer.destroy();
                 cleanupPartial();
                 activeControllers.delete(controller);
@@ -332,7 +274,6 @@ const patchDownloader = () => {
 
                 const formattedError = formatError(error, file);
                 hasFatalError = true;
-                fatalError = formattedError;
                 completed = Math.min(totalFiles, completed + 1);
                 abortAllActive();
                 queue.length = 0;
@@ -342,29 +283,22 @@ const patchDownloader = () => {
             };
 
             try {
-                const response = await fetch(normalizeFileUrl(file.url), { signal: controller.signal });
+                const response = await fetch(file.url, { signal: controller.signal });
                 clearTimeout(timeoutId);
 
                 if (!response.ok || !response.body) {
                     throw new Error(`Échec du téléchargement (${response.status} ${response.statusText})`);
                 }
 
-                stream = toNodeStream(response.body);
+                const stream = toNodeStream(response.body);
                 stream.on('data', (chunk) => {
-                    if (settled || writer.destroyed || writer.writableEnded) return;
                     bytesThisAttempt += chunk.length;
                     downloaded += chunk.length;
                     this.emit('progress', downloaded, size, file.type);
-                    try {
-                        writer.write(chunk);
-                    } catch (error) {
-                        handleFailure(error);
-                    }
+                    writer.write(chunk);
                 });
 
                 stream.on('end', () => {
-                    if (settled) return;
-                    settled = true;
                     writer.end();
                     activeControllers.delete(controller);
                     active = Math.max(0, active - 1);
@@ -381,9 +315,8 @@ const patchDownloader = () => {
             }
         };
 
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             resolvePromise = resolve;
-            rejectPromise = reject;
             pumpQueue();
         });
     };
