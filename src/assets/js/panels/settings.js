@@ -99,9 +99,7 @@ class Settings {
                 })
 
                 if (id == 'add') {
-                    let allAccounts = await this.db.readAllData('accounts')
-                    let cancelButton = document.querySelector('.cancel-home')
-                    if (cancelButton) cancelButton.style.display = allAccounts.length > 0 ? 'inline' : 'none'
+                    document.querySelector('.cancel-home').style.display = 'inline'
                     popupAccount.closePopup();
                     return changePanel('login')
                 }
