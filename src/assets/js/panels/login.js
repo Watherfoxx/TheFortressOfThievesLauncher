@@ -12,6 +12,7 @@ class Login {
     async init(config) {
         this.config = config;
         this.db = new database();
+        this.isOfflineSubmitting = false;
 
         if (typeof this.config.online == 'boolean') {
             this.config.online ? this.getMicrosoft() : this.getCrack()
@@ -67,10 +68,24 @@ class Login {
 
         let emailOffline = document.querySelector('.email-offline');
         let connectOffline = document.querySelector('.connect-offline');
+        let cancelOffline = document.querySelector('.cancel-offline');
         loginOffline.style.display = 'block';
 
-        connectOffline.addEventListener('click', async () => {
-            if (emailOffline.value.length < 3) {
+        let accounts = await this.db.readAllData('accounts');
+        if (cancelOffline) {
+            cancelOffline.style.display = accounts.length > 0 ? 'inline' : 'none'
+            cancelOffline.onclick = () => {
+                cancelOffline.style.display = 'none'
+                changePanel('settings')
+            }
+        }
+
+        connectOffline.onclick = async () => {
+            if (this.isOfflineSubmitting) return
+
+            const pseudo = emailOffline.value.trim()
+
+            if (pseudo.length < 3) {
                 popupLogin.openPopup({
                     title: 'Erreur',
                     content: 'Votre pseudo doit faire au moins 3 caractères.',
@@ -79,7 +94,7 @@ class Login {
                 return;
             }
 
-            if (emailOffline.value.match(/ /g)) {
+            if (pseudo.match(/ /g)) {
                 popupLogin.openPopup({
                     title: 'Erreur',
                     content: 'Votre pseudo ne doit pas contenir d\'espaces.',
@@ -88,9 +103,25 @@ class Login {
                 return;
             }
 
-            let MojangConnect = await Mojang.login(emailOffline.value);
+            let latestAccounts = await this.db.readAllData('accounts');
+            let alreadyExistingAccount = latestAccounts.find(account => account?.name?.toLowerCase() === pseudo.toLowerCase())
+            if (alreadyExistingAccount) {
+                popupLogin.openPopup({
+                    title: 'Erreur',
+                    content: `Le pseudo ${alreadyExistingAccount.name} est déjà ajouté.`,
+                    options: true
+                });
+                return;
+            }
+
+            this.isOfflineSubmitting = true
+            connectOffline.disabled = true
+
+            let MojangConnect = await Mojang.login(pseudo);
 
             if (MojangConnect.error) {
+                this.isOfflineSubmitting = false
+                connectOffline.disabled = false
                 popupLogin.openPopup({
                     title: 'Erreur',
                     content: MojangConnect.message,
@@ -99,8 +130,10 @@ class Login {
                 return;
             }
             await this.saveData(MojangConnect)
+            this.isOfflineSubmitting = false
+            connectOffline.disabled = false
             popupLogin.closePopup();
-        });
+        };
     }
 
     async getAZauth() {

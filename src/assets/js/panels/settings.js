@@ -99,7 +99,11 @@ class Settings {
                 })
 
                 if (id == 'add') {
-                    document.querySelector('.cancel-home').style.display = 'inline'
+                    let allAccounts = await this.db.readAllData('accounts')
+                    let cancelButton = document.querySelector('.cancel-home')
+                    if (cancelButton) cancelButton.style.display = allAccounts.length > 0 ? 'inline' : 'none'
+                    let cancelOfflineButton = document.querySelector('.cancel-offline')
+                    if (cancelOfflineButton) cancelOfflineButton.style.display = allAccounts.length > 0 ? 'inline' : 'none'
                     popupAccount.closePopup();
                     return changePanel('login')
                 }
