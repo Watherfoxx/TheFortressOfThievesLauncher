@@ -67,7 +67,17 @@ class Login {
 
         let emailOffline = document.querySelector('.email-offline');
         let connectOffline = document.querySelector('.connect-offline');
+        let cancelOffline = document.querySelector('.cancel-offline');
         loginOffline.style.display = 'block';
+
+        let accounts = await this.db.readAllData('accounts');
+        if (cancelOffline) {
+            cancelOffline.style.display = accounts.length > 0 ? 'inline' : 'none'
+            cancelOffline.addEventListener('click', () => {
+                cancelOffline.style.display = 'none'
+                changePanel('settings')
+            })
+        }
 
         connectOffline.addEventListener('click', async () => {
             if (emailOffline.value.length < 3) {
