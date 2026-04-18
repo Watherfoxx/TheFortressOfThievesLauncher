@@ -11,15 +11,6 @@ body {
     color: var(--color);
     font-family: 'Poppins';
     font-weight: bolder;
-    overflow: hidden;
-}
-
-body *,
-input,
-button,
-select,
-textarea {
-    font-family: 'Poppins';
 }
 
 img {
@@ -155,24 +146,21 @@ input::-webkit-inner-spin-button {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(3px);
 }
 
 .popup-tab {
-    width: min(40rem, 70%);
-    padding: 1.2rem;
-    background: rgba(0, 0, 0, 0.62);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 1rem;
+    width: 40%;
+    padding: 15px;
+    background: var(--background);
+    border-radius: 15px;
     z-index: 10;
 }
 
 .popup-title {
     text-align: center;
-    font-size: 1.6rem;
-    border-bottom: solid 1px rgba(255, 255, 255, 0.22);
-    margin-bottom: 0.8rem;
-    padding-bottom: 0.4rem;
+    font-size: 2rem;
+    border-bottom: solid 4px var(--color);
+    margin-bottom: 1rem;
 }
 
 .popup-options {
@@ -182,26 +170,14 @@ input::-webkit-inner-spin-button {
 }
 
 .popup-button {
-    background: var(--element-color);
-    color: #fff;
-    border: none;
-    border-radius: 0.75rem;
-    padding: 0.45rem 2rem;
+    background: none;
+    color: var(--color);
+    border: solid 4px var(--element-color);
+    border-radius: 10px;
+    padding: 0.3rem 4rem;
     font-size: inherit;
     font-weight: bold;
-    margin: 0.8rem 0 0;
-    cursor: pointer;
-    transition: transform .2s ease, filter .2s ease;
-}
-
-.popup-button:hover {
-    transform: translateY(-2px);
-    filter: brightness(1.08);
-}
-
-.popup-content {
-    font-weight: 500;
-    line-height: 1.4;
+    margin: 15px 10px;
 }
 
 .panel {

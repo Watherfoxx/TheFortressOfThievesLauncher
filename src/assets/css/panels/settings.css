@@ -20,7 +20,7 @@
 }
 
 .nav-box {
-    width: 80%;
+    width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -414,83 +414,4 @@
 
 .active-close {
     border: 4px solid var(--element-color);
-}
-/* Hero-style refresh */
-.settings .container {
-    background: linear-gradient(to right, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.5));
-}
-
-.nav-settings {
-    width: 18rem;
-    background: rgba(0, 0, 0, 0.55);
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
-    justify-content: flex-start;
-    padding-top: 3.5rem;
-    gap: 1rem;
-}
-
-.nav-settings p {
-    font-size: 1.4rem;
-    margin-top: 0;
-    letter-spacing: 0.03em;
-}
-
-.nav-settings-btn {
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 0.8rem;
-    width: calc(100% - 2rem);
-    padding: 0.6rem 0.8rem;
-    font-size: 0.95rem;
-}
-
-.active-settings-BTN {
-    background: var(--element-color);
-}
-
-.container-settings {
-    width: calc(100% - 18rem);
-    height: 100%;
-    padding-top: 2rem;
-}
-
-.settings-elements-box,
-.account {
-    background: rgba(0, 0, 0, 0.45);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 1rem;
-}
-
-.settings-elements-box {
-    width: 84%;
-    padding: 1.2rem 1.4rem;
-}
-
-.titre-tab {
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 0.9rem;
-    padding: 0.55rem 1.6rem;
-    font-size: 1.45rem;
-}
-
-.java-path-btn,
-.size-btn,
-.max-files-btn,
-.theme-btn,
-.close-btn {
-    border-radius: 0.7rem;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    background: rgba(255, 255, 255, 0.1);
-    padding: 0.45rem 0.9rem;
-}
-
-.java-path-btn:hover,
-.size-btn:hover,
-.max-files-btn:hover,
-.theme-btn:hover,
-.close-btn:hover,
-.account:hover {
-    transform: translateY(-1px);
-    transition: transform .2s ease, filter .2s ease;
-    filter: brightness(1.08);
 }
