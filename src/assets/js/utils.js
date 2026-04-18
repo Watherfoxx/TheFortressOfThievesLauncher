@@ -55,12 +55,7 @@ async function verifyRemoteSkin(url) {
 }
 
 async function setBackground(theme) {
-    if (typeof theme == 'undefined') {
-        let databaseLauncher = new database();
-        let configClient = await databaseLauncher.readData('configClient');
-        theme = configClient?.launcher_config?.theme || "auto"
-        theme = await ipcRenderer.invoke('is-dark-theme', theme).then(res => res)
-    }
+    theme = true;
     let background
     let body = document.body;
     body.className = theme ? 'dark global' : 'light global';
