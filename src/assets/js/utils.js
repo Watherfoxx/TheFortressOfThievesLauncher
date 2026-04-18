@@ -134,12 +134,15 @@ async function headplayer(skinBase64) {
 async function setStatus(opt) {
     let nameServerElement = document.querySelector('.server-status-name')
     let statusServerElement = document.querySelector('.server-status-text')
+    let playerCountContainer = document.querySelector('.status-player-count')
     let playersOnline = document.querySelector('.status-player-count .player-count')
+
+    if (!nameServerElement || !statusServerElement || !playerCountContainer || !playersOnline) return
 
     if (!opt) {
         statusServerElement.classList.add('red')
         statusServerElement.innerHTML = `Ferme - 0 ms`
-        document.querySelector('.status-player-count').classList.add('red')
+        playerCountContainer.classList.add('red')
         playersOnline.innerHTML = '0'
         return
     }
@@ -151,13 +154,13 @@ async function setStatus(opt) {
 
     if (!statusServer.error) {
         statusServerElement.classList.remove('red')
-        document.querySelector('.status-player-count').classList.remove('red')
+        playerCountContainer.classList.remove('red')
         statusServerElement.innerHTML = `En ligne`
         playersOnline.innerHTML = statusServer.playersConnect
     } else {
         statusServerElement.classList.add('red')
         statusServerElement.innerHTML = `Fermé`
-        document.querySelector('.status-player-count').classList.add('red')
+        playerCountContainer.classList.add('red')
         playersOnline.innerHTML = '0'
     }
 }
