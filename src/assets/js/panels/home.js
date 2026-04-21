@@ -322,6 +322,11 @@ class Home {
 
             javaPath: configClient.java_config.java_path,
 
+            java: {
+                version: 21,
+                type: 'jre'
+            },
+
             screen: {
                 width: configClient.game_config.screen_size.width,
                 height: configClient.game_config.screen_size.height
