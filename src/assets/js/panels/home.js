@@ -338,20 +338,22 @@ class Home {
             },
 
             JVM_ARGS: [
-                '-Dio.netty.maxDirectMemory=0',
-                '-XX:+UseG1GC',
-                '-XX:+ParallelRefProcEnabled',
-                '-XX:MaxGCPauseMillis=100',
-                '-XX:+UnlockExperimentalVMOptions',
+                //'-Dio.netty.maxDirectMemory=0', Retiré pour l'ajoute de ZGC
+                //'-XX:+UseG1GC', Retiré pour l'ajoute de ZGC
+                //'-XX:+ParallelRefProcEnabled', Retiré pour l'ajoute de ZGC
+                ///'-XX:MaxGCPauseMillis=100', Retiré pour l'ajoute de ZGC
+                //'-XX:+UnlockExperimentalVMOptions', Retiré pour l'ajoute de ZGC
                 '-XX:+DisableExplicitGC',
-                '-XX:G1NewSizePercent=20',
-                '-XX:G1MaxNewSizePercent=60',
-                '-XX:G1HeapRegionSize=8M',
-                '-XX:G1ReservePercent=20',
-                '-XX:InitiatingHeapOccupancyPercent=15',
+                //'-XX:G1NewSizePercent=20', Retiré pour l'ajoute de ZGC
+                //'-XX:G1MaxNewSizePercent=60', Retiré pour l'ajoute de ZGC
+                //'-XX:G1HeapRegionSize=8M', Retiré pour l'ajoute de ZGC
+                //'-XX:G1ReservePercent=20', Retiré pour l'ajoute de ZGC
+                //'-XX:InitiatingHeapOccupancyPercent=15', Retiré pour l'ajoute de ZGC
                 '-XX:+AlwaysPreTouch',
-                '-XX:+PerfDisableSharedMem',
-                '-XX:+UseStringDeduplication'
+                //'-XX:+PerfDisableSharedMem', Retiré pour l'ajoute de ZGC
+                //'-XX:+UseStringDeduplication', Retiré pour l'ajoute de ZGC
+                '-XX:+UseZGC', // Ajouté pour la v3 de Distant Horizon
+                '-XX:+ZGenerational' // Ajouté pour la v3 de Distant Horizon
             ]
         }
 
