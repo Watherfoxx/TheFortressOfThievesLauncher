@@ -213,9 +213,9 @@
     height: 3.5rem;
     border-radius: 0.85rem;
     color: #fff;
-    font-size: 1.5rem;
+    font-size: 1.95rem;
     cursor: pointer;
-    background: var(--element-color);
+    background: none;
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.35);
     transition: transform .25s ease, box-shadow .25s ease, filter .25s ease;
 }
