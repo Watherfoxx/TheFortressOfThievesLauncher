@@ -157,6 +157,7 @@ class Home {
         let instanceSelect = instancesList.find(i => i.name == configClient?.instance_selct) ? configClient?.instance_selct : null
 
         let instanceBTN = document.querySelector('.play-instance')
+        let playElements = document.querySelector('.play-elements')
         let instancePopup = document.querySelector('.instance-popup')
         let instancesListPopup = document.querySelector('.instances-List')
         let instanceCloseBTN = document.querySelector('.close-popup')
@@ -166,10 +167,8 @@ class Home {
             if (!instanceSelector || !instanceBTN) return
             if (shouldDisplay) {
                 instanceSelector.style.display = 'flex'
-                instanceBTN.style.paddingRight = ''
             } else {
                 instanceSelector.style.display = 'none'
-                instanceBTN.style.paddingRight = '0'
             }
         }
 
@@ -239,7 +238,7 @@ class Home {
             }
         })
 
-        instanceBTN.addEventListener('click', async e => {
+        playElements.addEventListener('click', async e => {
             let configClient = await this.db.readData('configClient')
             instanceSelect = configClient.instance_selct
             let activeAuth = auth
@@ -248,7 +247,7 @@ class Home {
                 auth = activeAuth
             }
 
-            if (e.target.classList.contains('instance-select')) {
+            if (e.target.closest('.instance-select')) {
                 instancesListPopup.innerHTML = ''
                 for (let instance of instancesList) {
                     if (instance.whitelistActive) {
@@ -273,7 +272,7 @@ class Home {
                 instancePopup.style.display = 'flex'
             }
 
-            if (!e.target.classList.contains('instance-select')) this.startGame()
+            if (!e.target.closest('.instance-select')) this.startGame()
         })
 
         instanceCloseBTN.addEventListener('click', () => instancePopup.style.display = 'none')
