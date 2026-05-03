@@ -234,7 +234,7 @@ class Home {
                 instancePopup.style.display = 'none'
                 let instance = await config.getInstanceList()
                 let options = instance.find(i => i.name == configClient.instance_selct)
-                await setStatus(options.status)
+                if (options) await setStatus(options.status)
             }
         })
 
@@ -287,6 +287,15 @@ class Home {
         let instance = await config.getInstanceList()
         let authenticator = await this.db.readData('accounts', configClient.account_selected)
         let options = instance.find(i => i.name == configClient.instance_selct)
+
+        if (!options) {
+            let accessibleInstances = instance.filter(i => !i.whitelistActive || i.whitelist?.includes(authenticator?.name))
+            let fallback = accessibleInstances.find(i => !i.whitelistActive) || accessibleInstances[0]
+            configClient.instance_selct = fallback ? fallback.name : null
+            await this.db.updateData('configClient', configClient)
+            await setStatus(fallback ? fallback.status : null)
+            return
+        }
 
         let playInstanceBTN = document.querySelector('.play-instance')
         let infoStartingBOX = document.querySelector('.info-starting-game')
