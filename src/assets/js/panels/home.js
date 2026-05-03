@@ -301,6 +301,7 @@ class Home {
         let infoStartingBOX = document.querySelector('.info-starting-game')
         let infoStarting = document.querySelector(".info-starting-game-text")
         let progressBar = document.querySelector('.progress-bar')
+        let instanceSelector = document.querySelector('.instance-select')
 
         const dataDirectoryName = process.platform == 'darwin'
             ? this.config.dataDirectory
@@ -370,6 +371,7 @@ class Home {
         launch.Launch(opt);
 
         playInstanceBTN.style.display = "none"
+        if (instanceSelector) instanceSelector.style.display = 'none'
         infoStartingBOX.style.display = "block"
         progressBar.style.display = "";
         ipcRenderer.send('main-window-progress-load')
@@ -428,6 +430,7 @@ class Home {
             ipcRenderer.send('main-window-progress-reset')
             infoStartingBOX.style.display = "none"
             playInstanceBTN.style.display = "flex"
+            if (instanceSelector) instanceSelector.style.display = 'flex'
             infoStarting.innerHTML = `Vérification`
             new logger(pkg.name, '#7289da');
             console.log('Close');
@@ -485,6 +488,7 @@ class Home {
             ipcRenderer.send('main-window-progress-reset')
             infoStartingBOX.style.display = "none"
             playInstanceBTN.style.display = "flex"
+            if (instanceSelector) instanceSelector.style.display = 'flex'
             infoStarting.innerHTML = `Vérification`
             new logger(pkg.name, '#7289da');
             console.error(err);
