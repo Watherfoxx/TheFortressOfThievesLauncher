@@ -476,6 +476,12 @@
     width: min(96%, 54rem);
 }
 
+
+.account.account-select {
+    border: 1px solid var(--element-color);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--element-color) 55%, transparent);
+}
+
 .profile-uuid {
     display: none;
 }
