@@ -9,9 +9,248 @@ const { Launch } = require('minecraft-java-core')
 const { shell, ipcRenderer, systemPreferences } = require('electron')
 const fs = require('fs')
 const path = require('path')
+const fetch = require('node-fetch')
+const FormData = require('form-data')
+
+const DISCORD_CRASH_WEBHOOK_URL = 'https://discord.com/api/webhooks/1521544461602258977/o7VTq_nCCZFdwEmn58kZvizudJGffF4R1h8VLKcBuwiix3jzX_TMW8TIS6eJk8V9C4dh'
+const MAX_CRASH_REPORT_CHARS = 500000
+const MAX_LOG_CHARS = 160000
 
 class Home {
     static id = "home";
+
+    escapeHTML(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;')
+    }
+
+    isCrashExitCode(code) {
+        if (code === null || code === undefined) return false
+        return Number(code) !== 0
+    }
+
+    wait(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms))
+    }
+
+    listFiles(directoryPath, extension = '.txt') {
+        if (!fs.existsSync(directoryPath)) return null
+
+        return fs.readdirSync(directoryPath)
+            .filter(fileName => fileName.toLowerCase().endsWith(extension))
+            .map(fileName => {
+                const filePath = path.join(directoryPath, fileName)
+                const stats = fs.statSync(filePath)
+                return { filePath, key: path.resolve(filePath).toLowerCase(), mtimeMs: stats.mtimeMs }
+            })
+    }
+
+    getInstanceReportPaths(baseDataPath, instanceName) {
+        return [
+            path.join(baseDataPath, 'instances', instanceName),
+            path.join(baseDataPath, instanceName)
+        ]
+    }
+
+    createCrashReportSnapshot(instancePaths) {
+        const snapshot = new Map()
+        const files = instancePaths.flatMap(instancePath => [
+            ...(this.listFiles(path.join(instancePath, 'crash-reports')) || []),
+            ...[
+                path.join(instancePath, 'logs', 'latest.log'),
+                path.join(instancePath, 'logs', 'debug.log')
+            ].filter(filePath => fs.existsSync(filePath)).map(filePath => {
+                const stats = fs.statSync(filePath)
+                return { filePath, key: path.resolve(filePath).toLowerCase(), mtimeMs: stats.mtimeMs }
+            })
+        ])
+
+        for (const file of files) snapshot.set(file.key, file.mtimeMs)
+
+        return snapshot
+    }
+
+    hasFileChangedSinceSnapshot(file, snapshot) {
+        const previousMtime = snapshot?.get(file.key)
+        return previousMtime === undefined || file.mtimeMs > previousMtime
+    }
+
+    getNewestChangedFile(directoryPath, extension = '.txt', snapshot = new Map()) {
+        return (this.listFiles(directoryPath, extension) || [])
+            .filter(file => this.hasFileChangedSinceSnapshot(file, snapshot))
+            .sort((a, b) => b.mtimeMs - a.mtimeMs)[0]?.filePath || null
+    }
+
+    getNewestChangedFileInPaths(directoryPaths, extension = '.txt', snapshot = new Map()) {
+        return directoryPaths
+            .flatMap(directoryPath => this.listFiles(directoryPath, extension) || [])
+            .filter(file => this.hasFileChangedSinceSnapshot(file, snapshot))
+            .sort((a, b) => b.mtimeMs - a.mtimeMs)[0]?.filePath || null
+    }
+
+    getChangedFileInPaths(instancePaths, relativeFilePath, snapshot = new Map()) {
+        const changedFiles = instancePaths
+            .map(instancePath => path.join(instancePath, relativeFilePath))
+            .map(filePath => {
+                if (!fs.existsSync(filePath)) return null
+                const stats = fs.statSync(filePath)
+                return { filePath, key: path.resolve(filePath).toLowerCase(), mtimeMs: stats.mtimeMs }
+            })
+            .filter(Boolean)
+            .filter(file => this.hasFileChangedSinceSnapshot(file, snapshot))
+            .sort((a, b) => b.mtimeMs - a.mtimeMs)
+
+        return changedFiles[0]?.filePath || null
+    }
+
+    getChangedFile(filePath, snapshot = new Map()) {
+        if (!filePath || !fs.existsSync(filePath)) return null
+
+        const stats = fs.statSync(filePath)
+        const file = { filePath, key: path.resolve(filePath).toLowerCase(), mtimeMs: stats.mtimeMs }
+        return this.hasFileChangedSinceSnapshot(file, snapshot) ? filePath : null
+    }
+
+    readTextFileTail(filePath, maxChars = MAX_LOG_CHARS) {
+        if (!filePath || !fs.existsSync(filePath)) return null
+
+        const stats = fs.statSync(filePath)
+        const bytesToRead = Math.min(stats.size, maxChars * 2)
+        const buffer = Buffer.alloc(bytesToRead)
+        const fd = fs.openSync(filePath, 'r')
+
+        try {
+            fs.readSync(fd, buffer, 0, bytesToRead, Math.max(0, stats.size - bytesToRead))
+            const content = buffer.toString('utf8').slice(-maxChars)
+            return stats.size > bytesToRead
+                ? `[Log tronqué aux ${maxChars} derniers caractères]\n${content}`
+                : content
+        } finally {
+            fs.closeSync(fd)
+        }
+    }
+
+    buildCrashReport({ exitCode, baseDataPath, instanceName, authenticator, options, crashReportSnapshot }) {
+        const instancePaths = this.getInstanceReportPaths(baseDataPath, instanceName)
+        const newestCrashReport = this.getNewestChangedFileInPaths(
+            instancePaths.map(instancePath => path.join(instancePath, 'crash-reports')),
+            '.txt',
+            crashReportSnapshot
+        )
+        const reportFiles = [
+            { label: 'Crash report', filePath: newestCrashReport },
+            { label: 'Latest log', filePath: this.getChangedFileInPaths(instancePaths, path.join('logs', 'latest.log'), crashReportSnapshot) },
+            { label: 'Debug log', filePath: this.getChangedFileInPaths(instancePaths, path.join('logs', 'debug.log'), crashReportSnapshot) }
+        ].filter(entry => entry.filePath && fs.existsSync(entry.filePath))
+
+        const sections = [
+            'The Fortress Of Thieves - rapport de crash',
+            `Date: ${new Date().toISOString()}`,
+            `Code de sortie: ${exitCode}`,
+            `Instance: ${instanceName}`,
+            `Joueur: ${authenticator?.name || 'inconnu'}`,
+            `Launcher: ${pkg.name} ${pkg.version}`,
+            `Plateforme: ${process.platform} ${process.arch}`,
+            `Node: ${process.versions.node}`,
+            `Electron: ${process.versions.electron || 'inconnu'}`,
+            `Minecraft: ${options?.loadder?.minecraft_version || 'inconnu'}`,
+            `Loader: ${options?.loadder?.loadder_type || 'none'} ${options?.loadder?.loadder_version || ''}`.trim(),
+            `Dossiers surveillés: ${instancePaths.join(' | ')}`,
+            ''
+        ]
+
+        for (const reportFile of reportFiles) {
+            sections.push(`===== ${reportFile.label}: ${reportFile.filePath} =====`)
+            sections.push(this.readTextFileTail(reportFile.filePath) || 'Fichier illisible.')
+            sections.push('')
+        }
+
+        if (!reportFiles.length) sections.push('Aucun fichier de log ou crash-report trouvé.')
+
+        return {
+            content: sections.join('\n').slice(0, MAX_CRASH_REPORT_CHARS),
+            hasReportFiles: reportFiles.length > 0,
+            hasCrashReport: Boolean(newestCrashReport)
+        }
+    }
+
+    async sendCrashReportToWebhook(report, { exitCode, instanceName, playerName }) {
+        const safeInstanceName = String(instanceName || 'instance').replace(/[^a-z0-9._-]/gi, '_')
+        const form = new FormData()
+        form.append('payload_json', JSON.stringify({
+            username: 'Crash Reporter',
+            content: `Crash détecté sur ${instanceName || 'instance inconnue'} (code ${exitCode}) par ${playerName || 'joueur inconnu'}.`,
+            allowed_mentions: { parse: [] }
+        }))
+        form.append('file', Buffer.from(report, 'utf8'), {
+            filename: `crash-report-${safeInstanceName}-${Date.now()}.txt`,
+            contentType: 'text/plain'
+        })
+
+        const response = await fetch(DISCORD_CRASH_WEBHOOK_URL, {
+            method: 'POST',
+            body: form,
+            headers: form.getHeaders()
+        })
+
+        if (!response.ok) {
+            throw new Error(`Discord a refusé le rapport (${response.status} ${response.statusText}).`)
+        }
+    }
+
+    showCrashReportPopup(crashReport, crashContext) {
+        const crashPopup = new popup()
+        const canSendCrashReport = crashReport.hasCrashReport
+        const content = canSendCrashReport
+            ? `Le jeu s'est fermé d'une manière inattendue<br><br>Voulez-vous envoyer votre rapport de plantage ? Cela peut aider à corriger le soucis.`
+            : `Le jeu s'est fermé d'une manière inattendue`
+
+        crashPopup.openPopup({
+            title: 'Crash du jeu',
+            content,
+            color: 'var(--color)',
+            options: !canSendCrashReport,
+            buttons: canSendCrashReport ? [
+                {
+                    text: 'Ignorer',
+                    className: 'secondary'
+                },
+                {
+                    text: 'Envoyer',
+                    action: async () => {
+                        const sendingPopup = new popup()
+                        sendingPopup.openPopup({
+                            title: 'Rapport de crash',
+                            content: 'Envoi du rapport en cours...',
+                            color: 'var(--color)'
+                        })
+
+                        try {
+                            await this.sendCrashReportToWebhook(crashReport.content, crashContext)
+                            sendingPopup.openPopup({
+                                title: 'Rapport envoyé',
+                                content: 'Merci, le rapport de crash a bien été transmis.',
+                                color: 'var(--color)',
+                                options: true
+                            })
+                        } catch (error) {
+                            sendingPopup.openPopup({
+                                title: 'Envoi impossible',
+                                content: this.escapeHTML(error?.message || 'Une erreur inconnue est survenue.'),
+                                color: 'red',
+                                options: true
+                            })
+                            console.error('[Crash Report] Failed to send crash report:', error)
+                        }
+                    }
+                }
+            ] : []
+        })
+    }
 
     isMissingRuntimeDependency(error) {
         const errorPayload = [
@@ -368,7 +607,7 @@ class Home {
 
 
         console.log(opt);
-        launch.Launch(opt);
+        const crashReportSnapshot = this.createCrashReportSnapshot(this.getInstanceReportPaths(baseDataPath, options.name))
 
         playInstanceBTN.style.display = "none"
         if (instanceSelector) instanceSelector.style.display = 'none'
@@ -423,7 +662,7 @@ class Home {
             console.log(e);
         })
 
-        launch.on('close', code => {
+        launch.on('close', async code => {
             if (configClient.launcher_config.closeLauncher == 'close-launcher') {
                 ipcRenderer.send("main-window-show")
             };
@@ -434,6 +673,24 @@ class Home {
             infoStarting.innerHTML = `Vérification`
             new logger(pkg.name, '#7289da');
             console.log('Close');
+
+            await this.wait(750)
+            const crashReport = this.buildCrashReport({
+                exitCode: code,
+                baseDataPath,
+                instanceName: options.name,
+                authenticator,
+                options,
+                crashReportSnapshot
+            })
+
+            if (this.isCrashExitCode(code) || crashReport.hasCrashReport) {
+                this.showCrashReportPopup(crashReport, {
+                    exitCode: code,
+                    instanceName: options.name,
+                    playerName: authenticator?.name
+                })
+            }
         });
 
         launch.on('error', err => {
@@ -493,6 +750,8 @@ class Home {
             new logger(pkg.name, '#7289da');
             console.error(err);
         });
+
+        launch.Launch(opt);
     }
 
     getdate(e) {

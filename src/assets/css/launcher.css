@@ -178,7 +178,9 @@ input::-webkit-inner-spin-button {
 .popup-options {
     display: none;
     align-items: end;
-    flex-direction: column;
+    flex-direction: row;
+    justify-content: flex-end;
+    gap: 0.7rem;
 }
 
 .popup-button {
@@ -197,6 +199,10 @@ input::-webkit-inner-spin-button {
 .popup-button:hover {
     transform: translateY(-2px);
     filter: brightness(1.08);
+}
+
+.popup-button.secondary {
+    background: rgba(255, 255, 255, 0.16);
 }
 
 .popup-content {

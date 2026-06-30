@@ -11,7 +11,6 @@ export default class popup {
         this.popupTitle = document.querySelector('.popup-title');
         this.popupContent = document.querySelector('.popup-content');
         this.popupOptions = document.querySelector('.popup-options');
-        this.popupButton = document.querySelector('.popup-button');
     }
 
     openPopup(info) {
@@ -22,13 +21,31 @@ export default class popup {
         this.popupContent.style.color = info.color ? info.color : '#e21212';
         this.popupContent.innerHTML = info.content;
 
-        if (info.options) this.popupOptions.style.display = 'flex';
+        this.popupOptions.innerHTML = '';
+        this.popupOptions.style.display = 'none';
 
-        if (this.popupOptions.style.display !== 'none') {
-            this.popupButton.addEventListener('click', () => {
-                if (info.exit) return ipcRenderer.send('main-window-close');
-                this.closePopup();
-            })
+        if (info.options || info.buttons?.length) {
+            this.popupOptions.style.display = 'flex';
+
+            const buttons = info.buttons?.length ? info.buttons : [{
+                text: 'OK',
+                action: () => {
+                    if (info.exit) return ipcRenderer.send('main-window-close');
+                    this.closePopup();
+                }
+            }];
+
+            buttons.forEach(buttonInfo => {
+                const button = document.createElement('button');
+                button.classList.add('popup-button');
+                if (buttonInfo.className) button.classList.add(buttonInfo.className);
+                button.innerHTML = buttonInfo.text;
+                button.addEventListener('click', async () => {
+                    if (buttonInfo.close !== false) this.closePopup();
+                    if (typeof buttonInfo.action === 'function') await buttonInfo.action();
+                });
+                this.popupOptions.appendChild(button);
+            });
         }
     }
 
@@ -36,6 +53,7 @@ export default class popup {
         this.popup.style.display = 'none';
         this.popupTitle.innerHTML = '';
         this.popupContent.innerHTML = '';
+        this.popupOptions.innerHTML = '';
         this.popupOptions.style.display = 'none';
     }
 }
