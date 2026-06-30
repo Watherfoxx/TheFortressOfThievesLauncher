@@ -6,3 +6,15 @@ dist
 node-v*
 data
 .DS_Store
+web/launcher-v2/README.md
+web/launcher-v2/launcher/news-launcher/news.json
+web/launcher-v2/launcher/config-launcher/config.json
+web/launcher-v2/files/php/scandir.php.old
+web/launcher-v2/files/php/scandir.php
+web/launcher-v2/files/php/instances.php
+web/launcher-v2/files/index.php.tooold
+web/launcher-v2/files/index.php.old
+web/launcher-v2/files/index.php
+web/launcher-v2/files/file.php
+web/launcher-v2/.htaccess
+web/launcher-v2/.github/FUNDING.yml

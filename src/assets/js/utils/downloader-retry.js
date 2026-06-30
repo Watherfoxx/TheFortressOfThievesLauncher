@@ -6,6 +6,7 @@
  */
 
 const fs = require('fs');
+const path = require('path');
 const { Downloader } = require('minecraft-java-core');
 const { Readable } = require('stream');
 let WebReadableStream;
@@ -325,4 +326,53 @@ const patchDownloader = () => {
     Downloader.prototype.__fortressOriginalDownloadFileMultiple = originalDownloadFileMultiple;
 };
 
+const patchBundleIgnoreVerification = () => {
+    const coreEntry = require.resolve('minecraft-java-core');
+    const MinecraftBundle = require(path.join(path.dirname(coreEntry), 'Minecraft', 'Minecraft-Bundle.js')).default;
+
+    if (MinecraftBundle.prototype.__fortressPatchedIgnoredVerification) return;
+
+    const originalCheckBundle = MinecraftBundle.prototype.checkBundle;
+
+    const normalizePath = (value) => value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+
+    const matchesIgnoredEntry = (relativePath, ignoredList) => {
+        const normalizedPath = normalizePath(relativePath);
+
+        return ignoredList.some((entry) => {
+            const normalizedEntry = normalizePath(entry);
+            if (!normalizedEntry) return false;
+            return normalizedPath === normalizedEntry || normalizedPath.startsWith(`${normalizedEntry}/`);
+        });
+    };
+
+    MinecraftBundle.prototype.checkBundle = async function patchedCheckBundle(bundle) {
+        const ignoredList = Array.isArray(this.options?.ignored) ? this.options.ignored : [];
+
+        if (ignoredList.length === 0 || !Array.isArray(bundle)) {
+            return originalCheckBundle.call(this, bundle);
+        }
+
+        const instanceBase = this.options?.instance
+            ? path.resolve(this.options.path, 'instances', this.options.instance)
+            : path.resolve(this.options.path);
+
+        const filteredBundle = bundle.filter((file) => {
+            if (!file?.path || file.type === 'CFILE') return true;
+
+            const localPath = path.resolve(this.options.path, file.path);
+            if (!fs.existsSync(localPath)) return true;
+
+            const relativePath = path.relative(instanceBase, localPath);
+            return !matchesIgnoredEntry(relativePath, ignoredList);
+        });
+
+        return originalCheckBundle.call(this, filteredBundle);
+    };
+
+    MinecraftBundle.prototype.__fortressPatchedIgnoredVerification = true;
+    MinecraftBundle.prototype.__fortressOriginalCheckBundle = originalCheckBundle;
+};
+
 patchDownloader();
+patchBundleIgnoreVerification();
