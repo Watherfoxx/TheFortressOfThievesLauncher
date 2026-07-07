@@ -28,11 +28,6 @@ class Home {
             .replace(/'/g, '&#039;')
     }
 
-    isCrashExitCode(code) {
-        if (code === null || code === undefined) return false
-        return Number(code) !== 0
-    }
-
     wait(ms) {
         return new Promise(resolve => setTimeout(resolve, ms))
     }
@@ -684,7 +679,7 @@ class Home {
                 crashReportSnapshot
             })
 
-            if (this.isCrashExitCode(code) || crashReport.hasCrashReport) {
+            if (crashReport.hasCrashReport) {
                 this.showCrashReportPopup(crashReport, {
                     exitCode: code,
                     instanceName: options.name,
