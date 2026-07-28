@@ -2,16 +2,10 @@
     position: relative;
     display: flex;
     height: 100%;
-    background-image: linear-gradient(to right, rgba(9, 15, 10, 0.85) 0%, rgba(9, 15, 10, 0.5) 35%, rgba(9, 15, 10, 0.2) 65%, rgba(9, 15, 10, 0.15) 100%), linear-gradient(to top, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.2) 45%, rgba(0, 0, 0, 0.1) 100%), url('../../images/background/dark/background-1.png');
+    background-image: url('../../images/background/dark/background-1.png');
     background-size: cover;
     background-position: center;
     overflow: hidden;
-}
-
-.hero-overlay {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
 }
 
 .left-rail {
@@ -144,13 +138,6 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 1.5rem;
-}
-
-.hero-logo {
-    width: 12rem;
-    height: 12rem;
-    border-radius: 1rem;
-    object-fit: cover;
 }
 
 .hero-description {

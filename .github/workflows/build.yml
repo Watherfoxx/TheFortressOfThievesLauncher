@@ -56,3 +56,17 @@ jobs:
           GH_TOKEN: ${{ secrets.github_token }}
         run: npm run build
         shell: bash
+
+      - name: Verify Linux update metadata
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ secrets.github_token }}
+        run: |
+          test -s dist/latest-linux.yml
+          grep -q '^version:' dist/latest-linux.yml
+          grep -q 'sha512:' dist/latest-linux.yml
+          grep -q '\.AppImage' dist/latest-linux.yml
+          version="$(node -p "require('./package.json').version")"
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${version}" \
+            --jq '.assets[].name' | grep -Fxq 'latest-linux.yml'
+        shell: bash

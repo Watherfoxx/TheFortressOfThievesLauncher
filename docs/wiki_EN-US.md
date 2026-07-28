@@ -363,6 +363,7 @@ From the file located in the web folder /launcher/config-launcher/config.json yo
 - game_args : add additional custom arguments to launch the game
 - dataDirectory: `Minecraft` This option allows you to define the directory where your game will download. Do not put a dot, it will be added automatically if needed.
 - ignored: `logs` This option allows you to white-list the files that will not be verified by "verify".
+- hidden: `mods, config/file.toml` This option automatically hides instance files or folders on Windows.
 - status: This section allows you to define which server will be displayed in the launcher.
 - nameserver: `Craftlaunch Server` This option allows you to set the server name that will be displayed in the launcher.
 - ip: `123.546.789` This option sets the IP address of the server that will be displayed in the launcher.

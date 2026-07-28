@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Downloader } = require('minecraft-java-core');
+const nodeFetch = require('node-fetch');
 const { Readable } = require('stream');
 let WebReadableStream;
 
@@ -84,7 +85,7 @@ const formatError = (error, file) => {
 
     if (typeof error === 'object') {
         const formatted = { ...error };
-        const originalMessage = formatted.error || formatted.message || formatted?.cause?.message || formatted.toString();
+        const originalMessage = formatted.error || error.message || error?.cause?.message || error.toString();
         const fallback = 'Une erreur inconnue est survenue lors du téléchargement.';
         const friendly = getFriendlyMessage(error);
 
@@ -374,5 +375,126 @@ const patchBundleIgnoreVerification = () => {
     MinecraftBundle.prototype.__fortressOriginalCheckBundle = originalCheckBundle;
 };
 
+const patchMinecraftLibraryArtifacts = () => {
+    const coreEntry = require.resolve('minecraft-java-core');
+    const Libraries = require(path.join(path.dirname(coreEntry), 'Minecraft', 'Minecraft-Libraries.js')).default;
+
+    if (Libraries.prototype.__fortressPatchedLibraryArtifacts) return;
+
+    const originalGetLibraries = Libraries.prototype.Getlibraries;
+    const mojangOS = {
+        win32: 'windows',
+        darwin: 'osx',
+        linux: 'linux'
+    };
+
+    Libraries.prototype.Getlibraries = async function patchedGetLibraries(json) {
+        const bundle = await originalGetLibraries.call(this, json);
+        if (!Array.isArray(bundle) || !Array.isArray(json?.libraries)) return bundle;
+
+        const existingPaths = new Set(bundle.map(file => file?.path).filter(Boolean));
+        const currentOS = mojangOS[process.platform] || process.platform;
+
+        for (const library of json.libraries) {
+            const nativeClassifier = library?.natives?.[currentOS] || library?.natives?.[process.platform];
+            const artifact = library?.downloads?.artifact;
+
+            // minecraft-java-core downloads only the native classifier when
+            // "natives" is present. LWJGL also needs this platform-independent
+            // Java artifact on the classpath.
+            if (!nativeClassifier || !artifact?.path) continue;
+
+            const artifactPath = `libraries/${artifact.path}`;
+            if (existingPaths.has(artifactPath)) continue;
+
+            bundle.push({
+                sha1: artifact.sha1,
+                size: artifact.size,
+                path: artifactPath,
+                type: 'Libraries',
+                url: artifact.url
+            });
+            existingPaths.add(artifactPath);
+        }
+
+        return bundle;
+    };
+
+    Libraries.prototype.__fortressPatchedLibraryArtifacts = true;
+    Libraries.prototype.__fortressOriginalGetLibraries = originalGetLibraries;
+};
+
+const patchForgeFetchFallback = () => {
+    if (globalThis.__fortressPatchedForgeFetch || typeof globalThis.fetch !== 'function') return;
+
+    const originalFetch = globalThis.fetch.bind(globalThis);
+    const forgeHost = 'files.minecraftforge.net';
+
+    globalThis.fetch = async (input, init) => {
+        const url = typeof input === 'string' ? input : input?.url;
+
+        try {
+            return await originalFetch(input, init);
+        } catch (error) {
+            let parsedUrl;
+            try {
+                parsedUrl = new URL(url);
+            } catch (parseError) {
+                throw error;
+            }
+
+            if (parsedUrl.hostname !== forgeHost) throw error;
+
+            // Chromium can reject a Forge response with
+            // ERR_CONTENT_DECODING_FAILED when a proxy/CDN advertises an
+            // encoding that does not match the body. Retry through Node and
+            // explicitly request the uncompressed representation.
+            try {
+                const headers = {
+                    ...(init?.headers || {}),
+                    'accept-encoding': 'identity'
+                };
+
+                return await nodeFetch(url, { ...init, headers });
+            } catch (fallbackError) {
+                if (!fallbackError.cause) fallbackError.cause = error;
+                throw fallbackError;
+            }
+        }
+    };
+
+    globalThis.__fortressPatchedForgeFetch = true;
+    globalThis.__fortressOriginalFetch = originalFetch;
+};
+
+const patchLoaderErrorPropagation = () => {
+    const coreEntry = require.resolve('minecraft-java-core');
+    const Loader = require(path.join(path.dirname(coreEntry), 'Minecraft-Loader', 'index.js')).default;
+
+    if (Loader.prototype.__fortressPatchedErrorPropagation) return;
+
+    const originalInstall = Loader.prototype.install;
+
+    Loader.prototype.install = async function patchedLoaderInstall(...args) {
+        try {
+            return await originalInstall.apply(this, args);
+        } catch (error) {
+            const formattedError = formatError(error);
+
+            // MinecraftLoader starts install() without awaiting its promise.
+            // Converting rejected promises into the expected EventEmitter error
+            // prevents an unhandled rejection and lets the launcher restore its UI.
+            this.emit('error', formattedError);
+            return formattedError;
+        }
+    };
+
+    Loader.prototype.__fortressPatchedErrorPropagation = true;
+    Loader.prototype.__fortressOriginalInstall = originalInstall;
+};
+
+patchForgeFetchFallback();
 patchDownloader();
 patchBundleIgnoreVerification();
+patchMinecraftLibraryArtifacts();
+patchLoaderErrorPropagation();

@@ -6,15 +6,15 @@ const nodeFetch = require('node-fetch')
 const png2icons = require('png2icons');
 const Jimp = require('jimp');
 
-const { preductname } = require('./package.json');
+const { preductname, version } = require('./package.json');
 
 class Index {
     async init() {
         this.obf = true
         this.Fileslist = []
-        process.argv.forEach(async val => {
+        for (const val of process.argv) {
             if (val.startsWith('--icon')) {
-                return this.iconSet(val.split('=')[1])
+                await this.iconSet(val.split('=')[1])
             }
 
             if (val.startsWith('--obf')) {
@@ -26,7 +26,7 @@ class Index {
                 let buildType = val.split('=')[1]
                 if (buildType == 'platform') return await this.buildPlatform()
             }
-        });
+        }
     }
 
     async Obfuscate() {
@@ -60,7 +60,7 @@ class Index {
 
     async buildPlatform() {
         await this.Obfuscate();
-        builder.build({
+        await builder.build({
             config: {
                 generateUpdatesFilesForAllChannels: false,
                 appId: preductname,
@@ -130,10 +130,38 @@ class Index {
                 }
             }
         }).then(() => {
+            this.verifyUpdateMetadata()
             console.log('le build est terminé')
         }).catch(err => {
             console.error('Error during build!', err)
+            throw err
         })
+    }
+
+    verifyUpdateMetadata() {
+        const metadataByPlatform = {
+            win32: { file: 'latest.yml', artifact: /\.exe\b/i },
+            darwin: { file: 'latest-mac.yml', artifact: /\.zip\b/i },
+            linux: { file: 'latest-linux.yml', artifact: /\.AppImage\b/i }
+        }
+        const expected = metadataByPlatform[process.platform]
+        if (!expected) throw new Error(`Plateforme de build non prise en charge: ${process.platform}`)
+
+        const metadataPath = `./dist/${expected.file}`
+        if (!fs.existsSync(metadataPath)) {
+            throw new Error(`Métadonnées de mise à jour manquantes: ${metadataPath}`)
+        }
+
+        const metadata = fs.readFileSync(metadataPath, 'utf8')
+        const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        if (!new RegExp(`^version:\\s*['"]?${escapedVersion}['"]?\\s*$`, 'm').test(metadata)) {
+            throw new Error(`${expected.file} ne référence pas la version ${version}`)
+        }
+        if (!/^\s*sha512:\s*\S+/m.test(metadata) || !expected.artifact.test(metadata)) {
+            throw new Error(`${expected.file} est incomplet ou ne référence pas le bon artefact`)
+        }
+
+        console.log(`Métadonnées de mise à jour vérifiées: ${metadataPath}`)
     }
 
     getFiles(path, file = []) {
@@ -165,4 +193,7 @@ class Index {
     }
 }
 
-new Index().init();
+new Index().init().catch(err => {
+    console.error('Build failed!', err)
+    process.exitCode = 1
+});

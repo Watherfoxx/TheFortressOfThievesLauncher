@@ -7,6 +7,7 @@ import '../utils/downloader-retry.js'
 
 const { Launch } = require('minecraft-java-core')
 const { shell, ipcRenderer, systemPreferences } = require('electron')
+const { execFile } = require('child_process')
 const fs = require('fs')
 const path = require('path')
 const fetch = require('node-fetch')
@@ -258,11 +259,9 @@ class Home {
         return /(?:NoClassDefFoundError|ClassNotFoundException):\s*org(?:\.|\/)lwjgl/i.test(errorPayload)
     }
 
-    async repairCorruptedRuntimeFiles(basePath, instanceName) {
-        const instancePath = path.join(basePath, instanceName)
+    async repairCorruptedRuntimeFiles(basePath) {
         const candidatePaths = [
-            path.join(instancePath, 'libraries', 'org', 'lwjgl'),
-            path.join(instancePath, 'loader')
+            path.join(basePath, 'libraries', 'org', 'lwjgl')
         ]
 
         const deletedPaths = []
@@ -275,7 +274,65 @@ class Home {
         return {
             repaired: deletedPaths.length > 0,
             deletedPaths,
-            instancePath
+            runtimePath: basePath
+        }
+    }
+
+    getHiddenEntries(options) {
+        const hiddenEntries = options?.hidden ?? options?.hiddenPaths ?? options?.hiddenFiles ?? options?.hide
+
+        if (!Array.isArray(hiddenEntries)) return []
+
+        return hiddenEntries
+            .map(entry => typeof entry === 'string' ? entry : entry?.path)
+            .filter(entry => typeof entry === 'string' && entry.trim())
+    }
+
+    resolveInstanceRelativePath(instanceBasePath, relativePath) {
+        const normalizedRelativePath = relativePath.replace(/\\/g, '/').replace(/^\/+/, '')
+
+        if (
+            path.isAbsolute(normalizedRelativePath) ||
+            normalizedRelativePath === '..' ||
+            normalizedRelativePath.startsWith('../') ||
+            normalizedRelativePath.includes('/../')
+        ) {
+            return null
+        }
+
+        const resolvedBasePath = path.resolve(instanceBasePath)
+        const resolvedTargetPath = path.resolve(resolvedBasePath, normalizedRelativePath)
+        const relativeFromBase = path.relative(resolvedBasePath, resolvedTargetPath)
+
+        if (relativeFromBase.startsWith('..') || path.isAbsolute(relativeFromBase)) return null
+
+        return resolvedTargetPath
+    }
+
+    setWindowsHiddenAttribute(targetPath) {
+        return new Promise(resolve => {
+            execFile('attrib', ['+H', targetPath], { windowsHide: true }, error => {
+                if (error) console.warn('[Hidden Files] Impossible de cacher le chemin:', targetPath, error)
+                resolve(!error)
+            })
+        })
+    }
+
+    async applyHiddenAttributes(baseDataPath, instanceName, hiddenEntries) {
+        if (process.platform !== 'win32' || !Array.isArray(hiddenEntries) || hiddenEntries.length === 0) return
+
+        const instanceBasePaths = [
+            path.join(baseDataPath, 'instances', instanceName),
+            path.join(baseDataPath, instanceName)
+        ]
+
+        for (const hiddenEntry of hiddenEntries) {
+            for (const instanceBasePath of instanceBasePaths) {
+                const targetPath = this.resolveInstanceRelativePath(instanceBasePath, hiddenEntry)
+                if (!targetPath || !fs.existsSync(targetPath)) continue
+
+                await this.setWindowsHiddenAttribute(targetPath)
+            }
         }
     }
 
@@ -541,6 +598,7 @@ class Home {
             ? this.config.dataDirectory
             : `.${this.config.dataDirectory}`
         const baseDataPath = path.join(await appdata(), dataDirectoryName)
+        const hiddenEntries = this.getHiddenEntries(options)
 
         let opt = {
             url: options.url,
@@ -562,6 +620,8 @@ class Home {
             verify: options.verify,
 
             ignored: [...options.ignored],
+
+            hidden: hiddenEntries,
 
             javaPath: configClient.java_config.java_path,
 
@@ -603,6 +663,8 @@ class Home {
 
         console.log(opt);
         const crashReportSnapshot = this.createCrashReportSnapshot(this.getInstanceReportPaths(baseDataPath, options.name))
+        let launchOutput = ''
+        await this.applyHiddenAttributes(baseDataPath, options.name, hiddenEntries)
 
         playInstanceBTN.style.display = "none"
         if (instanceSelector) instanceSelector.style.display = 'none'
@@ -646,7 +708,15 @@ class Home {
             infoStarting.innerHTML = `Finition de la proue`
         });
 
+        let hiddenAttributesAppliedAfterDownload = false
         launch.on('data', (e) => {
+            launchOutput = `${launchOutput}${String(e ?? '')}`.slice(-MAX_LOG_CHARS)
+
+            if (!hiddenAttributesAppliedAfterDownload) {
+                hiddenAttributesAppliedAfterDownload = true
+                this.applyHiddenAttributes(baseDataPath, options.name, hiddenEntries)
+            }
+
             progressBar.style.display = "none"
             if (configClient.launcher_config.closeLauncher == 'close-launcher') {
                 ipcRenderer.send("main-window-hide")
@@ -679,7 +749,27 @@ class Home {
                 crashReportSnapshot
             })
 
-            if (crashReport.hasCrashReport) {
+            if (this.isMissingRuntimeDependency({ message: launchOutput })) {
+                try {
+                    const repair = await this.repairCorruptedRuntimeFiles(baseDataPath)
+                    new popup().openPopup({
+                        title: 'Dépendances du jeu réparées',
+                        content: repair.repaired
+                            ? `Une bibliothèque graphique LWJGL était manquante ou incomplète. Relancez le jeu pour la retélécharger.`
+                            : `Une bibliothèque graphique LWJGL est manquante. Relancez le jeu pour lancer une nouvelle vérification.`,
+                        color: 'var(--color)',
+                        options: true
+                    })
+                    console.warn('[Repair] Missing LWJGL dependency detected after Minecraft closed:', repair.deletedPaths)
+                } catch (repairError) {
+                    console.error('[Repair] Failed to remove corrupted LWJGL files:', repairError)
+                    this.showCrashReportPopup(crashReport, {
+                        exitCode: code,
+                        instanceName: options.name,
+                        playerName: authenticator?.name
+                    })
+                }
+            } else if (crashReport.hasCrashReport) {
                 this.showCrashReportPopup(crashReport, {
                     exitCode: code,
                     instanceName: options.name,
@@ -691,7 +781,7 @@ class Home {
         launch.on('error', err => {
             const canRepairRuntime = this.isMissingRuntimeDependency(err)
             if (canRepairRuntime) {
-                this.repairCorruptedRuntimeFiles(baseDataPath, options.name)
+                this.repairCorruptedRuntimeFiles(baseDataPath)
                     .then(result => {
                         if (!result.repaired) return
                         new popup().openPopup({
