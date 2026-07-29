@@ -276,39 +276,55 @@ class Settings {
             await this.db.updateData('configClient', configClient);
         })
 
-        let closeBox = document.querySelector(".close-box");
-        let closeLauncher = configClient?.launcher_config?.closeLauncher || "close-launcher";
+        const closeBox = document.querySelector(".close-box");
+        const closeButtons = [...closeBox.querySelectorAll(".close-btn")];
+        const validCloseActions = closeButtons.map(button => button.dataset.closeAction);
+        const savedCloseAction = configClient?.launcher_config?.closeLauncher;
+        const initialCloseAction = validCloseActions.includes(savedCloseAction)
+            ? savedCloseAction
+            : "close-launcher";
 
-        if (closeLauncher == "close-launcher") {
-            document.querySelector('.close-launcher').classList.add('active-close');
-        } else if (closeLauncher == "close-all") {
-            document.querySelector('.close-all').classList.add('active-close');
-        } else if (closeLauncher == "close-none") {
-            document.querySelector('.close-none').classList.add('active-close');
+        const selectCloseAction = closeAction => {
+            for (const button of closeButtons) {
+                const selected = button.dataset.closeAction === closeAction;
+                button.classList.toggle('active-close', selected);
+                button.setAttribute('aria-checked', String(selected));
+            }
         }
 
-        closeBox.addEventListener("click", async e => {
-            if (e.target.classList.contains('close-btn')) {
-                let activeClose = document.querySelector('.active-close');
-                if (e.target.classList.contains('active-close')) return
-                activeClose?.classList.toggle('active-close');
+        const saveCloseAction = async button => {
+            const closeAction = button.dataset.closeAction;
+            if (!validCloseActions.includes(closeAction) || button.classList.contains('active-close')) return;
 
-                let configClient = await this.db.readData('configClient')
+            const previousCloseAction = closeButtons
+                .find(candidate => candidate.classList.contains('active-close'))
+                ?.dataset.closeAction || initialCloseAction;
 
-                if (e.target.classList.contains('close-launcher')) {
-                    e.target.classList.toggle('active-close');
-                    configClient.launcher_config.closeLauncher = "close-launcher";
-                    await this.db.updateData('configClient', configClient);
-                } else if (e.target.classList.contains('close-all')) {
-                    e.target.classList.toggle('active-close');
-                    configClient.launcher_config.closeLauncher = "close-all";
-                    await this.db.updateData('configClient', configClient);
-                } else if (e.target.classList.contains('close-none')) {
-                    e.target.classList.toggle('active-close');
-                    configClient.launcher_config.closeLauncher = "close-none";
-                    await this.db.updateData('configClient', configClient);
-                }
+            selectCloseAction(closeAction);
+
+            try {
+                const latestConfigClient = await this.db.readData('configClient');
+                latestConfigClient.launcher_config.closeLauncher = closeAction;
+                await this.db.updateData('configClient', latestConfigClient);
+            } catch (error) {
+                selectCloseAction(previousCloseAction);
+                console.error('[Settings] Impossible d’enregistrer le comportement du launcher :', error);
             }
+        }
+
+        selectCloseAction(initialCloseAction);
+
+        closeBox.addEventListener("click", event => {
+            const button = event.target.closest('.close-btn');
+            if (button && closeBox.contains(button)) saveCloseAction(button);
+        })
+
+        closeBox.addEventListener("keydown", event => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            const button = event.target.closest('.close-btn');
+            if (!button || !closeBox.contains(button)) return;
+            event.preventDefault();
+            saveCloseAction(button);
         })
     }
 }

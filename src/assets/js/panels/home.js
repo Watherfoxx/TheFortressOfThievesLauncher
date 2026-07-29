@@ -10,12 +10,15 @@ const { shell, ipcRenderer, systemPreferences } = require('electron')
 const { execFile } = require('child_process')
 const fs = require('fs')
 const path = require('path')
+const zlib = require('zlib')
 const fetch = require('node-fetch')
 const FormData = require('form-data')
 
 const DISCORD_CRASH_WEBHOOK_URL = 'https://discord.com/api/webhooks/1521544461602258977/o7VTq_nCCZFdwEmn58kZvizudJGffF4R1h8VLKcBuwiix3jzX_TMW8TIS6eJk8V9C4dh'
 const MAX_CRASH_REPORT_CHARS = 500000
 const MAX_LOG_CHARS = 160000
+const MAX_PENDING_LOG_CHARS = 2000000
+const NATIVE_LOG_STARTUP_GRACE_MS = 10000
 
 class Home {
     static id = "home";
@@ -31,6 +34,124 @@ class Home {
 
     wait(ms) {
         return new Promise(resolve => setTimeout(resolve, ms))
+    }
+
+    createGameLogCapture(instancePath) {
+        const logsDirectory = path.join(instancePath, 'logs')
+        const latestLogPath = path.join(logsDirectory, 'latest.log')
+        const initialStats = fs.existsSync(latestLogPath) ? fs.statSync(latestLogPath) : null
+
+        return {
+            logsDirectory,
+            latestLogPath,
+            initialMtimeMs: initialStats?.mtimeMs ?? null,
+            initialSize: initialStats?.size ?? null,
+            pendingOutput: '',
+            fallbackActive: false,
+            nativeLogActive: false,
+            activationTimer: null
+        }
+    }
+
+    nativeLatestLogWasUpdated(logCapture) {
+        if (!fs.existsSync(logCapture.latestLogPath)) return false
+
+        const currentStats = fs.statSync(logCapture.latestLogPath)
+        if (logCapture.initialMtimeMs === null) return currentStats.size > 0
+
+        return currentStats.mtimeMs > logCapture.initialMtimeMs
+            || currentStats.size !== logCapture.initialSize
+    }
+
+    getLogArchivePath(logCapture, latestLogStats) {
+        const date = latestLogStats.mtime
+        const datePrefix = [
+            date.getFullYear(),
+            String(date.getMonth() + 1).padStart(2, '0'),
+            String(date.getDate()).padStart(2, '0')
+        ].join('-')
+
+        let archiveIndex = 1
+        let archivePath
+        do {
+            archivePath = path.join(logCapture.logsDirectory, `${datePrefix}-${archiveIndex++}.log.gz`)
+        } while (fs.existsSync(archivePath))
+
+        return archivePath
+    }
+
+    rotateFallbackLatestLog(logCapture) {
+        if (!fs.existsSync(logCapture.latestLogPath)) return
+
+        const latestLogStats = fs.statSync(logCapture.latestLogPath)
+        if (latestLogStats.size === 0) {
+            fs.unlinkSync(logCapture.latestLogPath)
+            return
+        }
+
+        const archivePath = this.getLogArchivePath(logCapture, latestLogStats)
+        const compressedLog = zlib.gzipSync(fs.readFileSync(logCapture.latestLogPath))
+        fs.writeFileSync(archivePath, compressedLog)
+        fs.unlinkSync(logCapture.latestLogPath)
+    }
+
+    activateFallbackGameLog(logCapture) {
+        if (logCapture.fallbackActive || logCapture.nativeLogActive) return
+
+        if (this.nativeLatestLogWasUpdated(logCapture)) {
+            logCapture.nativeLogActive = true
+            logCapture.pendingOutput = ''
+            return
+        }
+
+        fs.mkdirSync(logCapture.logsDirectory, { recursive: true })
+        this.rotateFallbackLatestLog(logCapture)
+
+        const header = `[${new Date().toISOString()}] [Launcher/INFO]: Journal de secours activé : Minecraft n'a pas créé latest.log.\n`
+        fs.writeFileSync(logCapture.latestLogPath, `${header}${logCapture.pendingOutput}`, 'utf8')
+        logCapture.pendingOutput = ''
+        logCapture.fallbackActive = true
+    }
+
+    appendGameLogOutput(logCapture, output) {
+        if (!logCapture || logCapture.nativeLogActive) return
+
+        const text = String(output ?? '')
+        if (!text) return
+
+        if (logCapture.fallbackActive) {
+            fs.appendFileSync(logCapture.latestLogPath, text, 'utf8')
+            return
+        }
+
+        if (this.nativeLatestLogWasUpdated(logCapture)) {
+            logCapture.nativeLogActive = true
+            logCapture.pendingOutput = ''
+            if (logCapture.activationTimer) clearTimeout(logCapture.activationTimer)
+            return
+        }
+
+        logCapture.pendingOutput = `${logCapture.pendingOutput}${text}`.slice(-MAX_PENDING_LOG_CHARS)
+        if (!logCapture.activationTimer) {
+            logCapture.activationTimer = setTimeout(
+                () => this.activateFallbackGameLog(logCapture),
+                NATIVE_LOG_STARTUP_GRACE_MS
+            )
+        }
+    }
+
+    finalizeGameLogCapture(logCapture) {
+        if (!logCapture) return
+        if (logCapture.activationTimer) clearTimeout(logCapture.activationTimer)
+
+        this.activateFallbackGameLog(logCapture)
+        if (logCapture.fallbackActive) {
+            fs.appendFileSync(
+                logCapture.latestLogPath,
+                `\n[${new Date().toISOString()}] [Launcher/INFO]: Fin du processus Minecraft.\n`,
+                'utf8'
+            )
+        }
     }
 
     listFiles(directoryPath, extension = '.txt') {
@@ -663,6 +784,8 @@ class Home {
 
         console.log(opt);
         const crashReportSnapshot = this.createCrashReportSnapshot(this.getInstanceReportPaths(baseDataPath, options.name))
+        const instancePath = path.join(baseDataPath, 'instances', options.name)
+        const gameLogCapture = this.createGameLogCapture(instancePath)
         let launchOutput = ''
         await this.applyHiddenAttributes(baseDataPath, options.name, hiddenEntries)
 
@@ -711,6 +834,11 @@ class Home {
         let hiddenAttributesAppliedAfterDownload = false
         launch.on('data', (e) => {
             launchOutput = `${launchOutput}${String(e ?? '')}`.slice(-MAX_LOG_CHARS)
+            try {
+                this.appendGameLogOutput(gameLogCapture, e)
+            } catch (logError) {
+                console.error('[Game Logs] Impossible d’écrire la sortie Minecraft :', logError)
+            }
 
             if (!hiddenAttributesAppliedAfterDownload) {
                 hiddenAttributesAppliedAfterDownload = true
@@ -728,6 +856,12 @@ class Home {
         })
 
         launch.on('close', async code => {
+            try {
+                this.finalizeGameLogCapture(gameLogCapture)
+            } catch (logError) {
+                console.error('[Game Logs] Impossible de finaliser le journal Minecraft :', logError)
+            }
+
             if (configClient.launcher_config.closeLauncher == 'close-launcher') {
                 ipcRenderer.send("main-window-show")
             };
@@ -779,6 +913,12 @@ class Home {
         });
 
         launch.on('error', err => {
+            try {
+                this.finalizeGameLogCapture(gameLogCapture)
+            } catch (logError) {
+                console.error('[Game Logs] Impossible de finaliser le journal Minecraft :', logError)
+            }
+
             const canRepairRuntime = this.isMissingRuntimeDependency(err)
             if (canRepairRuntime) {
                 this.repairCorruptedRuntimeFiles(baseDataPath)

@@ -464,6 +464,14 @@
     filter: brightness(1.08);
 }
 
+.close-btn.active-close {
+    color: var(--color);
+    background: color-mix(in srgb, var(--element-color) 42%, rgba(255, 255, 255, 0.1));
+    border-color: var(--element-color);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--element-color) 45%, transparent);
+    filter: brightness(1.08);
+}
+
 /* Account list adjustments */
 .accounts-list {
     flex-direction: column;

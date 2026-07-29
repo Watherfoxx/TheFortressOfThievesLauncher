@@ -103,10 +103,10 @@
                 Launcher en arrière plan
             </div>
 
-            <div class="settings-elements content-evenly close-box">
-                <div class="close-launcher close-btn">Fermer le launcher après le démarrage du jeu</div>
-                <div class="close-none close-btn">Garder le launcher ouvert</div>
-                <div class="close-all close-btn">Fermer le jeu si le launcher est fermé</div>
+            <div class="settings-elements content-evenly close-box" role="radiogroup" aria-label="Comportement du launcher pendant le jeu">
+                <div class="close-launcher close-btn" data-close-action="close-launcher" role="radio" aria-checked="false" tabindex="0">Fermer le launcher après le démarrage du jeu</div>
+                <div class="close-none close-btn" data-close-action="close-none" role="radio" aria-checked="false" tabindex="0">Garder le launcher ouvert</div>
+                <div class="close-all close-btn" data-close-action="close-all" role="radio" aria-checked="false" tabindex="0">Fermer le jeu si le launcher est fermé</div>
             </div>
         </div>
 
