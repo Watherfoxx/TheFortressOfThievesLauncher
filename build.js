@@ -12,6 +12,7 @@ class Index {
     async init() {
         this.obf = true
         this.Fileslist = []
+        this.discordCrashWebhookUrl = process.env.DISCORD_CRASH_WEBHOOK_URL
         for (const val of process.argv) {
             if (val.startsWith('--icon')) {
                 await this.iconSet(val.split('=')[1])
@@ -30,6 +31,8 @@ class Index {
     }
 
     async Obfuscate() {
+        this.validateDiscordCrashWebhookUrl()
+
         if (fs.existsSync("./app")) fs.rmSync("./app", { recursive: true })
 
         for (let path of this.Fileslist) {
@@ -42,6 +45,10 @@ class Index {
             if (extFile == 'js') {
                 let code = fs.readFileSync(path, "utf8");
                 code = code.replace(/src\//g, 'app/');
+                code = code.replace(
+                    "'__BUILD_DISCORD_CRASH_WEBHOOK_URL__'",
+                    JSON.stringify(this.discordCrashWebhookUrl)
+                );
                 if (this.obf) {
                     await new Promise((resolve) => {
                         console.log(`Obfuscate ${path}`);
@@ -55,6 +62,30 @@ class Index {
             } else {
                 fs.copyFileSync(path, `${folder}/${fileName}`);
             }
+        }
+    }
+
+    validateDiscordCrashWebhookUrl() {
+        if (!this.discordCrashWebhookUrl) {
+            throw new Error(
+                "La variable DISCORD_CRASH_WEBHOOK_URL est requise pour compiler le launcher."
+            )
+        }
+
+        let webhookUrl
+        try {
+            webhookUrl = new URL(this.discordCrashWebhookUrl)
+        } catch {
+            throw new Error("DISCORD_CRASH_WEBHOOK_URL n'est pas une URL valide.")
+        }
+
+        const allowedHosts = new Set(['discord.com', 'discordapp.com'])
+        if (
+            webhookUrl.protocol !== 'https:'
+            || !allowedHosts.has(webhookUrl.hostname)
+            || !webhookUrl.pathname.startsWith('/api/webhooks/')
+        ) {
+            throw new Error("DISCORD_CRASH_WEBHOOK_URL n'est pas un webhook Discord valide.")
         }
     }
 

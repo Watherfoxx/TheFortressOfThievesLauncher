@@ -54,6 +54,7 @@ jobs:
       - name: Build
         env:
           GH_TOKEN: ${{ secrets.github_token }}
+          DISCORD_CRASH_WEBHOOK_URL: ${{ secrets.DISCORD_CRASH_WEBHOOK_URL }}
         run: npm run build
         shell: bash
 

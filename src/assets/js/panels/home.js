@@ -14,7 +14,7 @@ const zlib = require('zlib')
 const fetch = require('node-fetch')
 const FormData = require('form-data')
 
-const DISCORD_CRASH_WEBHOOK_URL = 'https://discord.com/api/webhooks/1521544461602258977/o7VTq_nCCZFdwEmn58kZvizudJGffF4R1h8VLKcBuwiix3jzX_TMW8TIS6eJk8V9C4dh'
+const DISCORD_CRASH_WEBHOOK_URL = process.env.DISCORD_CRASH_WEBHOOK_URL || '__BUILD_DISCORD_CRASH_WEBHOOK_URL__'
 const MAX_CRASH_REPORT_CHARS = 500000
 const MAX_LOG_CHARS = 160000
 const MAX_PENDING_LOG_CHARS = 2000000
