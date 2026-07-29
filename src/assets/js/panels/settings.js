@@ -127,21 +127,18 @@ class Settings {
 
     async setInstance(auth) {
         let configClient = await this.db.readData('configClient')
-        let instanceSelect = configClient.instance_selct
         let instancesList = await config.getInstanceList()
+        let accessibleInstances = instancesList.filter(instance => {
+            if (!instance.whitelistActive) return true
+            return instance.whitelist?.includes(auth.name)
+        })
+        let selectedInstance = accessibleInstances.find(instance => instance.name == configClient.instance_selct)
+        let fallbackInstance = selectedInstance
+            || accessibleInstances.find(instance => instance.whitelistActive == false)
+            || accessibleInstances[0]
 
-        for (let instance of instancesList) {
-            if (instance.whitelistActive) {
-                let whitelist = instance.whitelist.find(whitelist => whitelist == auth.name)
-                if (whitelist !== auth.name) {
-                    if (instance.name == instanceSelect) {
-                        let newInstanceSelect = instancesList.find(i => i.whitelistActive == false)
-                        configClient.instance_selct = newInstanceSelect.name
-                        await setStatus(newInstanceSelect.status)
-                    }
-                }
-            }
-        }
+        configClient.instance_selct = fallbackInstance?.name || null
+        await setStatus(fallbackInstance?.status || null)
         return configClient
     }
 

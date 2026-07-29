@@ -25,7 +25,16 @@ class Config {
 
     async getInstanceList() {
         let urlInstance = `${url}/files`
-        let instances = await nodeFetch(urlInstance).then(res => res.json()).catch(err => err)
+        let response = await nodeFetch(urlInstance)
+        if (!response.ok) {
+            throw new Error(`Impossible de récupérer les instances (${response.status} ${response.statusText})`)
+        }
+
+        let instances = await response.json()
+        if (!instances || typeof instances !== 'object' || Array.isArray(instances)) {
+            throw new Error('La liste des instances reçue est invalide')
+        }
+
         let instancesList = []
         instances = Object.entries(instances)
 

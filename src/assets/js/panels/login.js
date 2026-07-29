@@ -116,23 +116,31 @@ class Login {
 
             this.isOfflineSubmitting = true
             connectOffline.disabled = true
+            popupLogin.openPopup({
+                title: 'Ajout du compte',
+                content: 'Veuillez patienter...',
+                color: 'var(--color)'
+            })
 
-            let MojangConnect = await Mojang.login(pseudo);
+            try {
+                let MojangConnect = await Mojang.login(pseudo);
 
-            if (MojangConnect.error) {
+                if (MojangConnect.error) {
+                    throw new Error(MojangConnect.errorMessage || MojangConnect.message || MojangConnect.error)
+                }
+
+                let result = await this.saveData(MojangConnect)
+                if (result?.saved !== false) popupLogin.closePopup();
+            } catch (err) {
+                popupLogin.openPopup({
+                    title: 'Impossible d’ajouter le compte',
+                    content: err?.message || String(err),
+                    options: true
+                })
+            } finally {
                 this.isOfflineSubmitting = false
                 connectOffline.disabled = false
-                popupLogin.openPopup({
-                    title: 'Erreur',
-                    content: MojangConnect.message,
-                    options: true
-                });
-                return;
             }
-            await this.saveData(MojangConnect)
-            this.isOfflineSubmitting = false
-            connectOffline.disabled = false
-            popupLogin.closePopup();
         };
     }
 
@@ -238,32 +246,45 @@ class Login {
                 content: `Le compte ${duplicateAccount.name} est déjà ajouté sur le launcher.`,
                 options: true
             });
-            return;
+            return { saved: false, reason: 'duplicate' };
         }
 
         let configClient = await this.db.readData('configClient');
-        let account = await this.db.createData('accounts', connectionData)
-        let instanceSelect = configClient.instance_selct
         let instancesList = await config.getInstanceList()
-        configClient.account_selected = account.ID;
+        let account = await this.db.createData('accounts', connectionData)
+        let accessibleInstances = instancesList.filter(instance => {
+            if (!instance.whitelistActive) return true
+            return instance.whitelist?.includes(account.name)
+        })
+        let selectedInstance = accessibleInstances.find(instance => instance.name == configClient.instance_selct)
+        let fallbackInstance = selectedInstance
+            || accessibleInstances.find(instance => instance.whitelistActive == false)
+            || accessibleInstances[0]
 
-        for (let instance of instancesList) {
-            if (instance.whitelistActive) {
-                let whitelist = instance.whitelist.find(whitelist => whitelist == account.name)
-                if (whitelist !== account.name) {
-                    if (instance.name == instanceSelect) {
-                        let newInstanceSelect = instancesList.find(i => i.whitelistActive == false)
-                        configClient.instance_selct = newInstanceSelect.name
-                        await setStatus(newInstanceSelect.status)
-                    }
-                }
-            }
-        }
+        configClient.account_selected = account.ID;
+        configClient.instance_selct = fallbackInstance?.name || null
+        await setStatus(fallbackInstance?.status || null)
 
         await this.db.updateData('configClient', configClient);
         await addAccount(account);
         await accountSelect(account);
         changePanel('home');
+
+        if (!fallbackInstance) {
+            setTimeout(() => {
+                popupLogin.openPopup({
+                    title: 'Aucune instance disponible',
+                    content: `Aucune instance n'est disponible pour le compte ${account.name}.`,
+                    options: true
+                })
+            }, 0)
+        }
+
+        return {
+            saved: true,
+            account,
+            hasAccessibleInstance: Boolean(fallbackInstance)
+        }
     }
 }
 export default Login;

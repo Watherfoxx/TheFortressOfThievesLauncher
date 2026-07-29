@@ -567,6 +567,7 @@ class Home {
         let auth = await this.db.readData('accounts', configClient.account_selected)
         let instancesList = await config.getInstanceList()
         let instanceSelect = instancesList.find(i => i.name == configClient?.instance_selct) ? configClient?.instance_selct : null
+        let noInstancePopupAccount = null
 
         let instanceBTN = document.querySelector('.play-instance')
         let playElements = document.querySelector('.play-elements')
@@ -617,10 +618,21 @@ class Home {
                     instanceSelect = null
                     await this.db.updateData('configClient', configClient)
                     await setStatus(null)
+
+                    let accountIdentifier = currentAuth?.ID || currentAuth?.name
+                    if (currentAuth && (event || noInstancePopupAccount !== accountIdentifier)) {
+                        noInstancePopupAccount = accountIdentifier
+                        new popup().openPopup({
+                            title: 'Aucune instance disponible',
+                            content: `Aucune instance n'est disponible pour le compte ${currentAuth.name}.`,
+                            options: true
+                        })
+                    }
                 }
             } else {
                 instanceSelect = selectedInstance.name
                 await setStatus(selectedInstance.status)
+                noInstancePopupAccount = null
             }
 
             auth = currentAuth
@@ -706,6 +718,13 @@ class Home {
             configClient.instance_selct = fallback ? fallback.name : null
             await this.db.updateData('configClient', configClient)
             await setStatus(fallback ? fallback.status : null)
+            if (!fallback && authenticator) {
+                new popup().openPopup({
+                    title: 'Aucune instance disponible',
+                    content: `Aucune instance n'est disponible pour le compte ${authenticator.name}.`,
+                    options: true
+                })
+            }
             return
         }
 
