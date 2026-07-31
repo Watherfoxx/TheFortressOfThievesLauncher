@@ -39,8 +39,11 @@ class Config {
         instances = Object.entries(instances)
 
         for (let [name, data] of instances) {
-            let instance = data
-            instance.name = name
+            let instance = {
+                ...data,
+                folderName: typeof data?.name === 'string' && data.name.trim() ? data.name : name,
+                name
+            }
             instancesList.push(instance)
         }
         return instancesList

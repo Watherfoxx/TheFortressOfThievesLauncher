@@ -251,8 +251,8 @@ class Home {
         }
     }
 
-    buildCrashReport({ exitCode, baseDataPath, instanceName, authenticator, options, crashReportSnapshot }) {
-        const instancePaths = this.getInstanceReportPaths(baseDataPath, instanceName)
+    buildCrashReport({ exitCode, baseDataPath, instanceName, instanceFolderName, authenticator, options, crashReportSnapshot }) {
+        const instancePaths = this.getInstanceReportPaths(baseDataPath, instanceFolderName)
         const newestCrashReport = this.getNewestChangedFileInPaths(
             instancePaths.map(instancePath => path.join(instancePath, 'crash-reports')),
             '.txt',
@@ -739,13 +739,14 @@ class Home {
             : `.${this.config.dataDirectory}`
         const baseDataPath = path.join(await appdata(), dataDirectoryName)
         const hiddenEntries = this.getHiddenEntries(options)
+        const instanceFolderName = options.folderName || options.name
 
         let opt = {
             url: options.url,
             authenticator: authenticator,
             timeout: 10000,
             path: baseDataPath,
-            instance: options.name,
+            instance: instanceFolderName,
             version: options.loadder.minecraft_version,
             detached: configClient.launcher_config.closeLauncher == "close-all" ? false : true,
             downloadFileMultiple: configClient.launcher_config.download_multi,
@@ -802,11 +803,11 @@ class Home {
 
 
         console.log(opt);
-        const crashReportSnapshot = this.createCrashReportSnapshot(this.getInstanceReportPaths(baseDataPath, options.name))
-        const instancePath = path.join(baseDataPath, 'instances', options.name)
+        const crashReportSnapshot = this.createCrashReportSnapshot(this.getInstanceReportPaths(baseDataPath, instanceFolderName))
+        const instancePath = path.join(baseDataPath, 'instances', instanceFolderName)
         const gameLogCapture = this.createGameLogCapture(instancePath)
         let launchOutput = ''
-        await this.applyHiddenAttributes(baseDataPath, options.name, hiddenEntries)
+        await this.applyHiddenAttributes(baseDataPath, instanceFolderName, hiddenEntries)
 
         playInstanceBTN.style.display = "none"
         if (instanceSelector) instanceSelector.style.display = 'none'
@@ -861,7 +862,7 @@ class Home {
 
             if (!hiddenAttributesAppliedAfterDownload) {
                 hiddenAttributesAppliedAfterDownload = true
-                this.applyHiddenAttributes(baseDataPath, options.name, hiddenEntries)
+                this.applyHiddenAttributes(baseDataPath, instanceFolderName, hiddenEntries)
             }
 
             progressBar.style.display = "none"
@@ -897,6 +898,7 @@ class Home {
                 exitCode: code,
                 baseDataPath,
                 instanceName: options.name,
+                instanceFolderName,
                 authenticator,
                 options,
                 crashReportSnapshot
