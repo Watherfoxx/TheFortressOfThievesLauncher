@@ -100,6 +100,29 @@
 
         <div class="settings-elements-box">
             <div class="setting-text">
+                Emplacement des fichiers du jeu
+            </div>
+            <div class="game-directory-description">
+                Vous pouvez déplacer Java, les bibliothèques et toutes les instances vers un autre disque.
+                Le jeu doit être fermé pendant l’opération.
+            </div>
+            <div class="game-directory-disclaimer" role="note">
+                Conseil de performances : installez de préférence le jeu sur un SSD plutôt que sur un HDD,
+                et sur un disque interne plutôt que sur un disque externe.
+            </div>
+            <div class="settings-elements game-directory-controls">
+                <input type="text" class="game-directory-path" readonly aria-label="Emplacement actuel du jeu">
+                <button type="button" class="game-directory-move">Déplacer</button>
+                <button type="button" class="game-directory-default">Emplacement par défaut</button>
+            </div>
+            <div class="game-directory-progress-box" hidden>
+                <progress class="game-directory-progress" max="100" value="0"></progress>
+                <div class="game-directory-status" role="status" aria-live="polite"></div>
+            </div>
+        </div>
+
+        <div class="settings-elements-box">
+            <div class="setting-text">
                 Launcher en arrière plan
             </div>
 

@@ -3,9 +3,10 @@
  * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
  */
 
-import { changePanel, accountSelect, database, Slider, config, setStatus, popup, appdata } from '../utils.js'
+import { changePanel, accountSelect, database, Slider, config, setStatus, popup, defaultGameDirectoryPath, gameDirectoryPath } from '../utils.js'
 const { ipcRenderer } = require('electron');
 const os = require('os');
+const path = require('path');
 
 class Settings {
     static id = "settings";
@@ -18,6 +19,32 @@ class Settings {
         this.javaPath()
         this.resolution()
         this.launcher()
+        this.gameDirectory()
+    }
+
+    escapeHTML(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;')
+    }
+
+    formatBytes(bytes) {
+        if (!Number.isFinite(bytes) || bytes <= 0) return '0 octet'
+        const units = ['octets', 'Ko', 'Mo', 'Go', 'To']
+        const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+        const value = bytes / (1024 ** unitIndex)
+        return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
+    }
+
+    samePath(firstPath, secondPath) {
+        const first = path.resolve(firstPath)
+        const second = path.resolve(secondPath)
+        return process.platform === 'win32'
+            ? first.toLowerCase() === second.toLowerCase()
+            : first === second
     }
 
     navBTN() {
@@ -183,9 +210,12 @@ class Settings {
 
     async javaPath() {
         let javaPathText = document.querySelector(".java-path-txt")
-        javaPathText.textContent = `${await appdata()}/${process.platform == 'darwin' ? this.config.dataDirectory : `.${this.config.dataDirectory}`}/runtime`;
-
         let configClient = await this.db.readData('configClient')
+        javaPathText.textContent = path.join(
+            await gameDirectoryPath(this.config.dataDirectory, configClient),
+            'runtime'
+        )
+
         let javaPath = configClient?.java_config?.java_path || 'Utiliser la version de java fournie avec le launcher';
         let javaPathInputTxt = document.querySelector(".java-path-input-text");
         let javaPathInputFile = document.querySelector(".java-path-input-file");
@@ -216,6 +246,188 @@ class Settings {
             configClient.java_config.java_path = null
             await this.db.updateData('configClient', configClient);
         });
+    }
+
+    async gameDirectory() {
+        const pathInput = document.querySelector('.game-directory-path')
+        const moveButton = document.querySelector('.game-directory-move')
+        const defaultButton = document.querySelector('.game-directory-default')
+        const progressBox = document.querySelector('.game-directory-progress-box')
+        const progressBar = document.querySelector('.game-directory-progress')
+        const statusText = document.querySelector('.game-directory-status')
+
+        let configClient = await this.db.readData('configClient')
+        let currentPath = await gameDirectoryPath(this.config.dataDirectory, configClient)
+        const defaultPath = await defaultGameDirectoryPath(this.config.dataDirectory)
+        let gameActive = await ipcRenderer.invoke('game-activity-state')
+        let migrationActive = false
+
+        const refreshControls = () => {
+            pathInput.value = currentPath
+            pathInput.title = currentPath
+            moveButton.disabled = migrationActive || gameActive
+            defaultButton.disabled = migrationActive || gameActive || this.samePath(currentPath, defaultPath)
+        }
+
+        const showError = error => {
+            new popup().openPopup({
+                title: 'Déplacement impossible',
+                content: this.escapeHTML(error?.message || error || 'Une erreur inconnue est survenue.'),
+                color: 'red',
+                options: true
+            })
+        }
+
+        const setMigrationActive = active => {
+            migrationActive = active
+            progressBox.hidden = !active
+            refreshControls()
+        }
+
+        const rollbackMigration = async (transactionId, previousSetting, configWasUpdated) => {
+            let configRestored = !configWasUpdated
+            let destinationPreserved = false
+
+            if (configWasUpdated) {
+                try {
+                    const latestConfig = await this.db.readData('configClient')
+                    latestConfig.launcher_config.game_directory = previousSetting
+                    await this.db.updateData('configClient', latestConfig)
+                    configRestored = true
+                } catch (restoreError) {
+                    console.error('[Game Directory] Impossible de restaurer le réglage précédent :', restoreError)
+                }
+            }
+
+            if (configRestored) {
+                try {
+                    const rollback = await ipcRenderer.invoke('game-directory-rollback', transactionId)
+                    destinationPreserved = Boolean(rollback.destinationPreserved)
+                } catch (rollbackError) {
+                    destinationPreserved = true
+                    console.error('[Game Directory] Impossible d’annuler la copie :', rollbackError)
+                }
+            }
+
+            return { configRestored, destinationPreserved }
+        }
+
+        const runMigration = async (destinationPath, useDefaultPath = false) => {
+            if (migrationActive || gameActive) return
+
+            let transactionId = null
+            let configWasUpdated = false
+            const previousSetting = configClient?.launcher_config?.game_directory ?? null
+
+            setMigrationActive(true)
+            progressBar.value = 0
+            statusText.textContent = 'Préparation de la migration…'
+
+            try {
+                const result = await ipcRenderer.invoke('game-directory-migrate', {
+                    sourcePath: currentPath,
+                    destinationPath
+                })
+                transactionId = result.transactionId
+
+                const latestConfig = await this.db.readData('configClient')
+                latestConfig.launcher_config.game_directory = useDefaultPath ? null : result.destinationPath
+                await this.db.updateData('configClient', latestConfig)
+                configWasUpdated = true
+
+                const commit = await ipcRenderer.invoke('game-directory-commit', transactionId)
+                transactionId = null
+                configClient = latestConfig
+                currentPath = result.destinationPath
+
+                const javaPathText = document.querySelector('.java-path-txt')
+                if (javaPathText) javaPathText.textContent = path.join(currentPath, 'runtime')
+
+                document.dispatchEvent(new CustomEvent('launcher-game-directory-changed', {
+                    detail: { path: currentPath }
+                }))
+
+                progressBar.value = 100
+                statusText.textContent = 'Migration terminée.'
+                refreshControls()
+
+                const warning = commit.sourceRemoved
+                    ? ''
+                    : `<br><br>${this.escapeHTML(commit.warning)}`
+                new popup().openPopup({
+                    title: 'Dossier du jeu déplacé',
+                    content: `Le jeu utilise maintenant :<br>${this.escapeHTML(currentPath)}${warning}`,
+                    color: 'var(--color)',
+                    options: true
+                })
+            } catch (error) {
+                if (transactionId) {
+                    const rollback = await rollbackMigration(transactionId, previousSetting, configWasUpdated)
+                    if (!rollback.configRestored) {
+                        error = new Error(
+                            `${error?.message || error} Le nouvel emplacement a été conservé car le réglage précédent n’a pas pu être restauré.`
+                        )
+                    } else if (rollback.destinationPreserved) {
+                        error = new Error(
+                            `${error?.message || error} Une copie modifiée a été conservée dans ${destinationPath} pour éviter toute perte.`
+                        )
+                    }
+                }
+                statusText.textContent = 'La migration a échoué. L’ancien dossier a été conservé.'
+                showError(error)
+            } finally {
+                setMigrationActive(false)
+            }
+        }
+
+        const confirmMigration = (destinationPath, useDefaultPath = false) => {
+            if (this.samePath(currentPath, destinationPath)) {
+                showError('Le jeu utilise déjà cet emplacement.')
+                return
+            }
+
+            new popup().openPopup({
+                title: 'Déplacer le dossier du jeu',
+                content: `Tout le contenu sera déplacé vers :<br>${this.escapeHTML(destinationPath)}<br><br>N’éteignez pas le launcher pendant l’opération.`,
+                color: 'var(--color)',
+                buttons: [
+                    {
+                        text: 'Déplacer',
+                        action: async () => await runMigration(destinationPath, useDefaultPath)
+                    },
+                    { text: 'Annuler' }
+                ]
+            })
+        }
+
+        ipcRenderer.on('game-directory-migration-progress', (_, progress) => {
+            if (!migrationActive) return
+            const percentage = progress.totalBytes > 0
+                ? Math.min(100, Math.round(progress.copiedBytes / progress.totalBytes * 100))
+                : 100
+            progressBar.value = percentage
+            statusText.textContent = progress.totalFiles > 0
+                ? `Copie de ${progress.copiedFiles}/${progress.totalFiles} fichiers — ${this.formatBytes(progress.copiedBytes)} / ${this.formatBytes(progress.totalBytes)}`
+                : 'Création du nouvel emplacement…'
+        })
+
+        document.addEventListener('launcher-game-activity-changed', event => {
+            gameActive = Boolean(event.detail)
+            refreshControls()
+        })
+
+        moveButton.addEventListener('click', async () => {
+            if (gameActive) return showError('Fermez le jeu avant de déplacer son dossier.')
+            const selection = await ipcRenderer.invoke('game-directory-select', { currentPath })
+            if (!selection.canceled) confirmMigration(selection.destinationPath, false)
+        })
+
+        defaultButton.addEventListener('click', () => {
+            if (gameActive) return showError('Fermez le jeu avant de déplacer son dossier.')
+            confirmMigration(defaultPath, true)
+        })
+
+        refreshControls()
     }
 
     async resolution() {

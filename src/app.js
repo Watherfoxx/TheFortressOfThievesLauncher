@@ -3,7 +3,7 @@
  * @license CC-BY-NC 4.0 - https://creativecommons.org/licenses/by-nc/4.0
  */
 
-const { app, ipcMain, nativeTheme, systemPreferences } = require('electron');
+const { app, dialog, ipcMain, nativeTheme, systemPreferences } = require('electron');
 const { Microsoft } = require('minecraft-java-core');
 const { autoUpdater } = require('electron-updater')
 
@@ -12,8 +12,11 @@ const fs = require('fs');
 
 const UpdateWindow = require("./assets/js/windows/updateWindow.js");
 const MainWindow = require("./assets/js/windows/mainWindow.js");
+const { GameDirectoryMigrationManager } = require('./gameDirectory.js')
 
 let dev = process.env.NODE_ENV === 'dev';
+let gameActivityActive = false
+const gameDirectoryMigration = new GameDirectoryMigrationManager()
 
 if (dev) {
     let appPath = path.resolve('./data/Launcher').replace(/\\/g, '/');
@@ -48,6 +51,58 @@ ipcMain.on('update-window-progress-load', () => UpdateWindow.getWindow().setProg
 
 ipcMain.handle('path-user-data', () => app.getPath('userData'))
 ipcMain.handle('appData', e => app.getPath('appData'))
+
+ipcMain.handle('game-directory-select', async (_, { currentPath }) => {
+    const selection = await dialog.showOpenDialog(MainWindow.getWindow(), {
+        title: 'Choisir le nouvel emplacement du jeu',
+        buttonLabel: 'Choisir cet emplacement',
+        defaultPath: path.dirname(currentPath),
+        properties: ['openDirectory', 'createDirectory']
+    })
+
+    if (selection.canceled || !selection.filePaths.length) return { canceled: true }
+
+    const selectedPath = path.resolve(selection.filePaths[0])
+    const gameFolderName = path.basename(currentPath)
+    const destinationPath = path.basename(selectedPath).toLowerCase() === gameFolderName.toLowerCase()
+        ? selectedPath
+        : path.join(selectedPath, gameFolderName)
+
+    return { canceled: false, destinationPath }
+})
+
+ipcMain.handle('game-directory-migrate', async (event, options) => {
+    if (gameActivityActive) {
+        throw new Error('Le jeu ou son téléchargement est actuellement en cours. Fermez-le avant de déplacer le dossier.')
+    }
+
+    return await gameDirectoryMigration.migrate(options, progress => {
+        if (!event.sender.isDestroyed()) {
+            event.sender.send('game-directory-migration-progress', progress)
+        }
+    })
+})
+
+ipcMain.handle('game-directory-commit', async (_, transactionId) => {
+    return await gameDirectoryMigration.commit(transactionId)
+})
+
+ipcMain.handle('game-directory-rollback', async (_, transactionId) => {
+    return await gameDirectoryMigration.rollback(transactionId)
+})
+
+ipcMain.handle('game-activity-begin', () => {
+    if (gameActivityActive || gameDirectoryMigration.isBusy()) return false
+    gameActivityActive = true
+    return true
+})
+
+ipcMain.handle('game-activity-end', () => {
+    gameActivityActive = false
+    return true
+})
+
+ipcMain.handle('game-activity-state', () => gameActivityActive)
 
 ipcMain.on('main-window-maximize', () => {
     if (MainWindow.getWindow().isMaximized()) {

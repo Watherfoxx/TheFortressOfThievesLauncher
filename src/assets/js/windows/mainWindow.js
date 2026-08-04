@@ -34,7 +34,8 @@ function createWindow() {
         show: false,
         webPreferences: {
             contextIsolation: false,
-            nodeIntegration: true
+            nodeIntegration: true,
+            backgroundThrottling: false
         },
     });
     Menu.setApplicationMenu(null);

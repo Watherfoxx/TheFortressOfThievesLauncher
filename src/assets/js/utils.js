@@ -6,6 +6,7 @@
 const { ipcRenderer } = require('electron')
 const { Status } = require('minecraft-java-core')
 const fs = require('fs');
+const path = require('path');
 const pkg = require('../package.json');
 
 import config from './utils/config.js';
@@ -81,6 +82,19 @@ async function changePanel(id) {
 
 async function appdata() {
     return await ipcRenderer.invoke('appData').then(path => path)
+}
+
+async function defaultGameDirectoryPath(dataDirectory) {
+    const directoryName = process.platform === 'darwin' ? dataDirectory : `.${dataDirectory}`
+    return path.resolve(await appdata(), directoryName)
+}
+
+async function gameDirectoryPath(dataDirectory, configClient) {
+    const configuredPath = configClient?.launcher_config?.game_directory
+    if (typeof configuredPath === 'string' && configuredPath.trim()) {
+        return path.resolve(configuredPath)
+    }
+    return await defaultGameDirectoryPath(dataDirectory)
 }
 
 async function addAccount(data) {
@@ -173,5 +187,7 @@ export {
     accountSelect as accountSelect,
     slider as Slider,
     pkg as pkg,
-    setStatus as setStatus
+    setStatus as setStatus,
+    defaultGameDirectoryPath as defaultGameDirectoryPath,
+    gameDirectoryPath as gameDirectoryPath
 }

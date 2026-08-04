@@ -2,7 +2,7 @@
  * @author Luuxis
  * Luuxis License v1.0 (voir fichier LICENSE pour les détails en FR/EN)
  */
-import { config, database, logger, changePanel, appdata, setStatus, pkg, popup } from '../utils.js'
+import { config, database, logger, changePanel, gameDirectoryPath, setStatus, pkg, popup } from '../utils.js'
 import '../utils/downloader-retry.js'
 
 const { Launch } = require('minecraft-java-core')
@@ -34,6 +34,35 @@ class Home {
 
     wait(ms) {
         return new Promise(resolve => setTimeout(resolve, ms))
+    }
+
+    async beginGameActivity() {
+        const allowed = await ipcRenderer.invoke('game-activity-begin')
+        if (!allowed) {
+            new popup().openPopup({
+                title: 'Action impossible',
+                content: 'Le jeu est déjà actif ou son dossier est en cours de déplacement. Patientez avant de réessayer.',
+                color: 'var(--color)',
+                options: true
+            })
+            return false
+        }
+
+        document.dispatchEvent(new CustomEvent('launcher-game-activity-changed', { detail: true }))
+        return true
+    }
+
+    async endGameActivity() {
+        await ipcRenderer.invoke('game-activity-end')
+        document.dispatchEvent(new CustomEvent('launcher-game-activity-changed', { detail: false }))
+    }
+
+    async finishGameActivity(callback) {
+        try {
+            await callback()
+        } finally {
+            await this.endGameActivity()
+        }
     }
 
     createGameLogCapture(instancePath) {
@@ -706,6 +735,11 @@ class Home {
         const microphoneGranted = await this.ensureMicrophoneAccessForMac()
         if (!microphoneGranted) return
 
+        const activityStarted = await this.beginGameActivity()
+        if (!activityStarted) return
+
+        try {
+
         let launch = new Launch()
         let configClient = await this.db.readData('configClient')
         let instance = await config.getInstanceList()
@@ -725,6 +759,7 @@ class Home {
                     options: true
                 })
             }
+            await this.endGameActivity()
             return
         }
 
@@ -734,10 +769,7 @@ class Home {
         let progressBar = document.querySelector('.progress-bar')
         let instanceSelector = document.querySelector('.instance-select')
 
-        const dataDirectoryName = process.platform == 'darwin'
-            ? this.config.dataDirectory
-            : `.${this.config.dataDirectory}`
-        const baseDataPath = path.join(await appdata(), dataDirectoryName)
+        const baseDataPath = await gameDirectoryPath(this.config.dataDirectory, configClient)
         const hiddenEntries = this.getHiddenEntries(options)
         const instanceFolderName = options.folderName || options.name
 
@@ -875,7 +907,7 @@ class Home {
             console.log(e);
         })
 
-        launch.on('close', async code => {
+        launch.on('close', async code => this.finishGameActivity(async () => {
             try {
                 this.finalizeGameLogCapture(gameLogCapture)
             } catch (logError) {
@@ -931,9 +963,9 @@ class Home {
                     playerName: authenticator?.name
                 })
             }
-        });
+        }));
 
-        launch.on('error', err => {
+        launch.on('error', async err => this.finishGameActivity(async () => {
             try {
                 this.finalizeGameLogCapture(gameLogCapture)
             } catch (logError) {
@@ -942,9 +974,9 @@ class Home {
 
             const canRepairRuntime = this.isMissingRuntimeDependency(err)
             if (canRepairRuntime) {
-                this.repairCorruptedRuntimeFiles(baseDataPath)
-                    .then(result => {
-                        if (!result.repaired) return
+                try {
+                    const result = await this.repairCorruptedRuntimeFiles(baseDataPath)
+                    if (result.repaired) {
                         new popup().openPopup({
                             title: 'Réparation appliquée',
                             content: `Des fichiers critiques ont été réparés (${result.deletedPaths.length}). Relancez le jeu pour retélécharger les dépendances manquantes.`,
@@ -952,10 +984,10 @@ class Home {
                             options: true
                         })
                         console.warn('[Repair] Missing LWJGL dependency detected. Removed runtime folders:', result.deletedPaths)
-                    })
-                    .catch(repairError => {
-                        console.error('[Repair] Failed to remove corrupted runtime folders:', repairError)
-                    })
+                    }
+                } catch (repairError) {
+                    console.error('[Repair] Failed to remove corrupted runtime folders:', repairError)
+                }
             }
 
             let popupError = new popup()
@@ -995,9 +1027,19 @@ class Home {
             infoStarting.innerHTML = `Vérification`
             new logger(pkg.name, '#7289da');
             console.error(err);
-        });
+        }));
 
         launch.Launch(opt);
+        } catch (error) {
+            await this.endGameActivity()
+            console.error('[Launcher] Impossible de préparer le démarrage du jeu :', error)
+            new popup().openPopup({
+                title: 'Erreur',
+                content: this.escapeHTML(error?.message || 'Impossible de préparer le démarrage du jeu.'),
+                color: 'red',
+                options: true
+            })
+        }
     }
 
     getdate(e) {

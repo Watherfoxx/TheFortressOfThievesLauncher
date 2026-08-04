@@ -111,10 +111,23 @@ class Launcher {
                     download_multi: 5,
                     theme: 'dark',
                     closeLauncher: 'close-launcher',
-                    intelEnabledMac: true
+                    intelEnabledMac: true,
+                    game_directory: null
                 }
             })
+            return
         }
+
+        let updated = false
+        if (!configClient.launcher_config) {
+            configClient.launcher_config = {}
+            updated = true
+        }
+        if (!Object.prototype.hasOwnProperty.call(configClient.launcher_config, 'game_directory')) {
+            configClient.launcher_config.game_directory = null
+            updated = true
+        }
+        if (updated) await this.db.updateData('configClient', configClient)
     }
 
     createPanels(...panels) {
