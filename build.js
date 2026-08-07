@@ -91,7 +91,7 @@ class Index {
 
     async buildPlatform() {
         await this.Obfuscate();
-        await builder.build({
+        const buildOptions = {
             config: {
                 generateUpdatesFilesForAllChannels: false,
                 appId: preductname,
@@ -160,7 +160,12 @@ class Index {
                     }]
                 }
             }
-        }).then(() => {
+        }
+
+        const publishPolicy = process.env.ELECTRON_BUILDER_PUBLISH
+        if (publishPolicy) buildOptions.publish = publishPolicy
+
+        await builder.build(buildOptions).then(() => {
             this.verifyUpdateMetadata()
             console.log('le build est terminé')
         }).catch(err => {

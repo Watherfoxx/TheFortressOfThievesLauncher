@@ -139,8 +139,19 @@ app.on('window-all-closed', () => app.quit());
 
 autoUpdater.autoDownload = false;
 
+const serializeUpdaterError = error => ({
+    message: error?.message || String(error || 'Erreur de mise à jour inconnue'),
+    code: error?.code || null
+});
+
 ipcMain.handle('update-app', async () => {
-    return autoUpdater.checkForUpdates();
+    try {
+        await autoUpdater.checkForUpdates();
+        return { success: true };
+    } catch (error) {
+        console.error("Impossible de rechercher une mise à jour :", error);
+        return { success: false, error: serializeUpdaterError(error) };
+    }
 })
 
 autoUpdater.on('update-available', () => {
@@ -152,7 +163,7 @@ ipcMain.on('start-update', () => {
     autoUpdater.downloadUpdate().catch(error => {
         console.error("Impossible de télécharger la mise à jour :", error);
         const updateWindow = UpdateWindow.getWindow();
-        if (updateWindow) updateWindow.webContents.send('error', error);
+        if (updateWindow) updateWindow.webContents.send('error', serializeUpdaterError(error));
     });
 })
 
@@ -172,5 +183,5 @@ autoUpdater.on('download-progress', (progress) => {
 
 autoUpdater.on('error', (err) => {
     const updateWindow = UpdateWindow.getWindow();
-    if (updateWindow) updateWindow.webContents.send('error', err);
+    if (updateWindow) updateWindow.webContents.send('error', serializeUpdaterError(err));
 });

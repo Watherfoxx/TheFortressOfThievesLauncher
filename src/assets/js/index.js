@@ -77,7 +77,8 @@ class Splash {
         })
 
         try {
-            await ipcRenderer.invoke('update-app');
+            const result = await ipcRenderer.invoke('update-app');
+            if (result?.success === false) this.continueWithoutUpdate(result.error);
         } catch (error) {
             this.continueWithoutUpdate(error);
         }
