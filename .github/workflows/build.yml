@@ -4,15 +4,21 @@ on:
   push:
     branches: [ master ]
 
+permissions:
+  contents: write
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
       - name: Get version
-        run: echo "version=$(jq -r .version package.json)" >> $GITHUB_ENV
+        id: version
+        run: echo "value=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
       
       - name: Create Release
         id: create_release
@@ -20,10 +26,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.version }}
-          release_name: release ${{ env.version }}
-          draft: false
-          prerelease: ${{ contains(env.version, 'beta') || contains(env.version, 'alpha') }}
+          tag_name: ${{ steps.version.outputs.value }}
+          release_name: release ${{ steps.version.outputs.value }}
+          draft: true
+          prerelease: ${{ contains(steps.version.outputs.value, 'beta') || contains(steps.version.outputs.value, 'alpha') }}
 
   build-launcher:
     needs: create-release
@@ -71,3 +77,28 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${version}" \
             --jq '.assets[].name' | grep -Fxq 'latest-linux.yml'
         shell: bash
+
+  publish-release:
+    needs: [create-release, build-launcher]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish completed release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_VERSION: ${{ needs.create-release.outputs.version }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: process.env.RELEASE_VERSION
+            })
+
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              draft: false,
+              prerelease: /(?:alpha|beta)/i.test(process.env.RELEASE_VERSION)
+            })

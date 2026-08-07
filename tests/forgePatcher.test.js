@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 const test = require('node:test')
 
@@ -9,6 +11,53 @@ const coreDirectory = path.dirname(coreEntry)
 const ForgePatcher = require(path.join(coreDirectory, 'Minecraft-Loader', 'patcher.js')).default
 const Forge = require(path.join(coreDirectory, 'Minecraft-Loader', 'loader', 'forge', 'forge.js')).default
 const Loader = require(path.join(coreDirectory, 'Minecraft-Loader', 'index.js')).default
+const JavaDownloader = require(path.join(coreDirectory, 'Minecraft', 'Minecraft-Java.js')).default
+
+test('réutilise le véritable exécutable du runtime Java déjà extrait', async t => {
+    const temporaryPath = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'fortress-java-runtime-'))
+    t.after(() => fs.promises.rm(temporaryPath, { recursive: true, force: true }))
+
+    const executableName = process.platform === 'win32' ? 'java.exe' : 'java'
+    const executablePath = path.join(
+        temporaryPath,
+        'runtime',
+        'jre-21',
+        'zulu-jre-21',
+        'bin',
+        executableName
+    )
+    await fs.promises.mkdir(path.dirname(executablePath), { recursive: true })
+    await fs.promises.writeFile(executablePath, 'java-runtime')
+    if (process.platform !== 'win32') await fs.promises.chmod(executablePath, 0o755)
+
+    const java = new JavaDownloader({
+        path: temporaryPath,
+        java: { version: 21, type: 'jre' }
+    })
+    const result = await java.getJavaOther({ javaVersion: { majorVersion: 21 } }, 21)
+
+    assert.equal(path.resolve(result.path), path.resolve(executablePath))
+})
+
+test('Forge complète automatiquement l’extension .exe manquante sous Windows', {
+    skip: process.platform !== 'win32'
+}, async t => {
+    const temporaryPath = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'fortress-java-extension-'))
+    t.after(() => fs.promises.rm(temporaryPath, { recursive: true, force: true }))
+
+    const javaPathWithoutExtension = path.join(temporaryPath, 'bin', 'java')
+    await fs.promises.mkdir(path.dirname(javaPathWithoutExtension), { recursive: true })
+    await fs.promises.writeFile(`${javaPathWithoutExtension}.exe`, 'java-runtime')
+
+    const patcher = new ForgePatcher({ path: temporaryPath })
+    const result = await patcher.patcher({ processors: [] }, {
+        java: javaPathWithoutExtension,
+        minecraft: 'minecraft.jar',
+        minecraftJson: 'minecraft.json'
+    })
+
+    assert.deepEqual(result, { success: true })
+})
 
 test('un processus Forge non nul remonte une erreur sans exception EventEmitter', async () => {
     const patcher = new ForgePatcher({ path: process.cwd() })

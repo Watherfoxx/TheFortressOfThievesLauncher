@@ -796,9 +796,8 @@ class Home {
 
             hidden: hiddenEntries,
 
-            javaPath: configClient.java_config.java_path,
-
             java: {
+                path: configClient.java_config.java_path || null,
                 version: 21,
                 type: 'jre'
             },

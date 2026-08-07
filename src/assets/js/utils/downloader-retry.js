@@ -475,6 +475,105 @@ const normalizeProcessorArgument = (argument) => {
     return String(argument ?? '').replace(/"([^"]*)"/g, '$1');
 };
 
+const isUsableJavaExecutable = (candidatePath) => {
+    try {
+        const stat = fs.statSync(candidatePath);
+        if (!stat.isFile() || stat.size === 0) return false;
+
+        if (process.platform !== 'win32') {
+            try {
+                fs.accessSync(candidatePath, fs.constants.X_OK);
+            } catch (error) {
+                fs.chmodSync(candidatePath, 0o755);
+                fs.accessSync(candidatePath, fs.constants.X_OK);
+            }
+        }
+
+        return true;
+    } catch (error) {
+        return false;
+    }
+};
+
+const resolveExistingJavaExecutable = (candidatePath) => {
+    if (!candidatePath) return null;
+
+    const resolvedPath = path.resolve(candidatePath);
+    const directory = path.dirname(resolvedPath);
+    const baseName = path.basename(resolvedPath).toLowerCase();
+    const candidates = [resolvedPath];
+
+    if (process.platform === 'win32') {
+        if (!baseName.endsWith('.exe')) candidates.push(`${resolvedPath}.exe`);
+
+        const executableName = baseName.replace(/\.exe$/i, '');
+        if (executableName === 'java') candidates.push(path.join(directory, 'javaw.exe'));
+        if (executableName === 'javaw') candidates.push(path.join(directory, 'java.exe'));
+    }
+
+    return [...new Set(candidates)].find(isUsableJavaExecutable) || null;
+};
+
+const findBundledJavaExecutable = (runtimeFolder) => {
+    if (!fs.existsSync(runtimeFolder)) return null;
+
+    let runtimeEntries;
+    try {
+        runtimeEntries = fs.readdirSync(runtimeFolder, { withFileTypes: true });
+    } catch (error) {
+        return null;
+    }
+
+    const runtimeDirectories = [runtimeFolder, ...runtimeEntries
+        .filter(entry => entry.isDirectory())
+        .map(entry => path.join(runtimeFolder, entry.name))];
+
+    for (const runtimeDirectory of runtimeDirectories) {
+        const candidates = process.platform === 'win32'
+            ? [
+                path.join(runtimeDirectory, 'bin', 'java.exe'),
+                path.join(runtimeDirectory, 'bin', 'javaw.exe')
+            ]
+            : [
+                path.join(runtimeDirectory, 'bin', 'java'),
+                path.join(runtimeDirectory, 'Contents', 'Home', 'bin', 'java')
+            ];
+        const executable = candidates.find(isUsableJavaExecutable);
+        if (executable) return executable;
+    }
+
+    return null;
+};
+
+const patchJavaRuntimeExecutable = () => {
+    const coreEntry = require.resolve('minecraft-java-core');
+    const coreDirectory = path.dirname(coreEntry);
+    const JavaDownloader = require(path.join(coreDirectory, 'Minecraft', 'Minecraft-Java.js')).default;
+
+    if (JavaDownloader.prototype.__fortressPatchedJavaExecutable) return;
+
+    const originalGetJavaOther = JavaDownloader.prototype.getJavaOther;
+
+    JavaDownloader.prototype.getJavaOther = async function patchedGetJavaOther(jsonVersion, versionDownload) {
+        const majorVersion = versionDownload || jsonVersion?.javaVersion?.majorVersion || 8;
+        const runtimeFolder = path.resolve(this.options.path, `runtime/jre-${majorVersion}`);
+        const existingExecutable = findBundledJavaExecutable(runtimeFolder);
+
+        if (existingExecutable) return { files: [], path: existingExecutable };
+
+        const result = await originalGetJavaOther.call(this, jsonVersion, versionDownload);
+        if (!result || result.error) return result;
+
+        const executable = resolveExistingJavaExecutable(result.path)
+            || findBundledJavaExecutable(runtimeFolder);
+
+        return executable ? { ...result, path: executable } : result;
+    };
+
+    JavaDownloader.prototype.__fortressPatchedJavaExecutable = true;
+    JavaDownloader.prototype.__fortressOriginalGetJavaOther = originalGetJavaOther;
+};
+
 const patchForgePatcherExecution = () => {
     const coreEntry = require.resolve('minecraft-java-core');
     const coreDirectory = path.dirname(coreEntry);
@@ -486,7 +585,8 @@ const patchForgePatcherExecution = () => {
     const originalPatcher = ForgePatcher.prototype.patcher;
 
     ForgePatcher.prototype.patcher = async function patchedForgePatcher(profile, config, neoForgeOld = true) {
-        const javaPath = config?.java ? path.resolve(config.java) : null;
+        const configuredJavaPath = config?.java ? path.resolve(config.java) : null;
+        const javaPath = resolveExistingJavaExecutable(configuredJavaPath) || configuredJavaPath;
 
         if (!javaPath || !fs.existsSync(javaPath)) {
             const message = `L’exécutable Java requis par Forge est introuvable : ${javaPath || 'chemin non défini'}`;
@@ -687,6 +787,7 @@ patchForgeFetchFallback();
 patchDownloader();
 patchBundleIgnoreVerification();
 patchMinecraftLibraryArtifacts();
+patchJavaRuntimeExecutable();
 patchForgePatcherExecution();
 patchModLoaderErrorHandling();
 patchLoaderErrorPropagation();

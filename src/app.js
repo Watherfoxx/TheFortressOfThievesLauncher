@@ -140,16 +140,7 @@ app.on('window-all-closed', () => app.quit());
 autoUpdater.autoDownload = false;
 
 ipcMain.handle('update-app', async () => {
-    return await new Promise(async (resolve, reject) => {
-        autoUpdater.checkForUpdates().then(res => {
-            resolve(res);
-        }).catch(error => {
-            reject({
-                error: true,
-                message: error
-            })
-        })
-    })
+    return autoUpdater.checkForUpdates();
 })
 
 autoUpdater.on('update-available', () => {
@@ -158,7 +149,11 @@ autoUpdater.on('update-available', () => {
 });
 
 ipcMain.on('start-update', () => {
-    autoUpdater.downloadUpdate();
+    autoUpdater.downloadUpdate().catch(error => {
+        console.error("Impossible de télécharger la mise à jour :", error);
+        const updateWindow = UpdateWindow.getWindow();
+        if (updateWindow) updateWindow.webContents.send('error', error);
+    });
 })
 
 autoUpdater.on('update-not-available', () => {
