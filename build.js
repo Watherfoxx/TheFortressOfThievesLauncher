@@ -97,7 +97,7 @@ class Index {
                 appId: preductname,
                 productName: preductname,
                 copyright: 'Copyright © 2020-2024 Luuxis',
-                artifactName: "${productName}-${os}-${arch}.${ext}",
+                artifactName: "The-Fortress-Of-Thieves-${os}-${arch}.${ext}",
                 extraMetadata: { main: 'app/app.js' },
                 files: ["app/**/*", "package.json", "LICENSE.md"],
                 directories: { "output": "dist" },

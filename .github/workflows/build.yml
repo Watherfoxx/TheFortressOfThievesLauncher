@@ -94,6 +94,18 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Normalize release filenames
+        run: |
+          for file in dist/*\ *; do
+            test -e "$file" || continue
+            target="${file// /-}"
+            echo "Renommage : $(basename "$file") -> $(basename "$target")"
+            mv "$file" "$target"
+          done
+          echo "Fichiers collectés :"
+          find dist -maxdepth 1 -type f -printf '%f\n' | sort
+        shell: bash
+
       - name: Verify collected release files
         run: |
           required=(
