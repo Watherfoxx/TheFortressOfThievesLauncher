@@ -110,6 +110,7 @@ jobs:
         id: verify_files
         run: |
           metadata_files=(latest.yml latest-mac.yml latest-linux.yml)
+          required_assets_list=("${metadata_files[@]}")
           for metadata in "${metadata_files[@]}"; do
             test -s "dist/${metadata}" || { echo "Métadonnées manquantes : ${metadata}"; exit 1; }
 
@@ -119,10 +120,11 @@ jobs:
                 echo "${metadata} référence un fichier absent : ${asset}"
                 exit 1
               }
+              required_assets_list+=("$asset")
             done < <(sed -nE 's/^[[:space:]]*- url:[[:space:]]*(.+)[[:space:]]*$/\1/p' "dist/${metadata}")
           done
 
-          required_assets="$(find dist -maxdepth 1 -type f -printf '%f\n' | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+          required_assets="$(printf '%s\n' "${required_assets_list[@]}" | sort -u | jq -R -s -c 'split("\n") | map(select(length > 0))')"
           test "$required_assets" != "[]" || { echo "Aucun fichier de release collecté"; exit 1; }
           echo "required_assets=${required_assets}" >> "$GITHUB_OUTPUT"
         shell: bash
@@ -154,17 +156,16 @@ jobs:
               core.setFailed('La liste des fichiers à publier est vide.')
               return
             }
-            let release
             let missingAssets = requiredAssets
 
             for (let attempt = 1; attempt <= 24; attempt++) {
-              const response = await github.rest.repos.getRelease({
+              const releaseAssets = await github.paginate(github.rest.repos.listReleaseAssets, {
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                release_id: releaseId
+                release_id: releaseId,
+                per_page: 100
               })
-              release = response.data
-              const uploadedAssets = new Set(release.assets.map(asset => asset.name))
+              const uploadedAssets = new Set(releaseAssets.map(asset => asset.name))
               missingAssets = requiredAssets.filter(asset => !uploadedAssets.has(asset))
 
               if (missingAssets.length === 0) break
@@ -176,6 +177,12 @@ jobs:
               core.setFailed(`Release incomplète, fichiers manquants : ${missingAssets.join(', ')}`)
               return
             }
+
+            const { data: release } = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId
+            })
 
             await github.rest.repos.updateRelease({
               owner: context.repo.owner,
