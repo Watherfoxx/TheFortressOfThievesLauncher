@@ -107,19 +107,24 @@ jobs:
         shell: bash
 
       - name: Verify collected release files
+        id: verify_files
         run: |
-          required=(
-            latest.yml
-            latest-mac.yml
-            latest-linux.yml
-            The-Fortress-Of-Thieves-win-x64.exe
-            The-Fortress-Of-Thieves-mac-x64.zip
-            The-Fortress-Of-Thieves-mac-arm64.zip
-            The-Fortress-Of-Thieves-linux-x86_64.AppImage
-          )
-          for file in "${required[@]}"; do
-            test -s "dist/${file}" || { echo "Fichier manquant ou vide : ${file}"; exit 1; }
+          metadata_files=(latest.yml latest-mac.yml latest-linux.yml)
+          for metadata in "${metadata_files[@]}"; do
+            test -s "dist/${metadata}" || { echo "Métadonnées manquantes : ${metadata}"; exit 1; }
+
+            while IFS= read -r asset; do
+              test -n "$asset" || continue
+              test -s "dist/${asset}" || {
+                echo "${metadata} référence un fichier absent : ${asset}"
+                exit 1
+              }
+            done < <(sed -nE 's/^[[:space:]]*- url:[[:space:]]*(.+)[[:space:]]*$/\1/p' "dist/${metadata}")
           done
+
+          required_assets="$(find dist -maxdepth 1 -type f -printf '%f\n' | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+          test "$required_assets" != "[]" || { echo "Aucun fichier de release collecté"; exit 1; }
+          echo "required_assets=${required_assets}" >> "$GITHUB_OUTPUT"
         shell: bash
 
       - name: Upload all release files
@@ -134,6 +139,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.create_release.outputs.version }}
           RELEASE_ID: ${{ needs.create_release.outputs.release_id }}
+          REQUIRED_ASSETS: ${{ steps.verify_files.outputs.required_assets }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -143,15 +149,11 @@ jobs:
               return
             }
 
-            const requiredAssets = [
-              'latest.yml',
-              'latest-mac.yml',
-              'latest-linux.yml',
-              'The-Fortress-Of-Thieves-win-x64.exe',
-              'The-Fortress-Of-Thieves-mac-x64.zip',
-              'The-Fortress-Of-Thieves-mac-arm64.zip',
-              'The-Fortress-Of-Thieves-linux-x86_64.AppImage'
-            ]
+            const requiredAssets = JSON.parse(process.env.REQUIRED_ASSETS || '[]')
+            if (requiredAssets.length === 0) {
+              core.setFailed('La liste des fichiers à publier est vide.')
+              return
+            }
             let release
             let missingAssets = requiredAssets
 
