@@ -132,8 +132,30 @@ jobs:
       - name: Upload all release files
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_VERSION: ${{ needs.create_release.outputs.version }}
-        run: gh release upload "$RELEASE_VERSION" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          RELEASE_ID: ${{ needs.create_release.outputs.release_id }}
+        run: |
+          test -n "$RELEASE_ID" || { echo "Identifiant de release absent"; exit 1; }
+
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets" --jq '.[].id' |
+            while IFS= read -r asset_id; do
+              test -n "$asset_id" || continue
+              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}"
+            done
+
+          for file in dist/*; do
+            test -f "$file" || continue
+            name="$(basename "$file")"
+            encoded_name="$(jq -rn --arg value "$name" '$value | @uri')"
+            echo "Upload vers la release ${RELEASE_ID} : ${name}"
+            curl --fail-with-body --retry 3 --retry-all-errors \
+              --request POST \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header "Accept: application/vnd.github+json" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --header "Content-Type: application/octet-stream" \
+              --data-binary "@${file}" \
+              "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=${encoded_name}"
+          done
         shell: bash
 
       - name: Publish completed release
