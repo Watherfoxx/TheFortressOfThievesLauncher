@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 const { Downloader } = require('minecraft-java-core');
 const nodeFetch = require('node-fetch');
 const { Readable } = require('stream');
@@ -467,6 +468,181 @@ const patchForgeFetchFallback = () => {
     globalThis.__fortressOriginalFetch = originalFetch;
 };
 
+const normalizeProcessorArgument = (argument) => {
+    // Forge surrounds paths with quotes because its original implementation
+    // launches through a shell. spawn() receives an argument array and does not
+    // need shell quoting, even when paths contain spaces.
+    return String(argument ?? '').replace(/"([^"]*)"/g, '$1');
+};
+
+const patchForgePatcherExecution = () => {
+    const coreEntry = require.resolve('minecraft-java-core');
+    const coreDirectory = path.dirname(coreEntry);
+    const ForgePatcher = require(path.join(coreDirectory, 'Minecraft-Loader', 'patcher.js')).default;
+    const { getPathLibraries } = require(path.join(coreDirectory, 'utils', 'Index.js'));
+
+    if (ForgePatcher.prototype.__fortressPatchedSafeExecution) return;
+
+    const originalPatcher = ForgePatcher.prototype.patcher;
+
+    ForgePatcher.prototype.patcher = async function patchedForgePatcher(profile, config, neoForgeOld = true) {
+        const javaPath = config?.java ? path.resolve(config.java) : null;
+
+        if (!javaPath || !fs.existsSync(javaPath)) {
+            const message = `L’exécutable Java requis par Forge est introuvable : ${javaPath || 'chemin non défini'}`;
+            this.emit('error', message);
+            return { error: message };
+        }
+
+        if (process.platform !== 'win32') {
+            try {
+                fs.accessSync(javaPath, fs.constants.X_OK);
+            } catch (accessError) {
+                try {
+                    fs.chmodSync(javaPath, 0o755);
+                    fs.accessSync(javaPath, fs.constants.X_OK);
+                } catch (chmodError) {
+                    const message = `Java n’est pas exécutable : ${javaPath} (${chmodError.message})`;
+                    this.emit('error', message);
+                    return { error: message };
+                }
+            }
+        }
+
+        const processors = Array.isArray(profile?.processors)
+            ? profile.processors
+            : Object.values(profile?.processors || {});
+        for (const processor of processors) {
+            if (processor.sides && !processor.sides.includes('client')) continue;
+
+            const jarInfo = getPathLibraries(processor.jar);
+            const jarPath = path.resolve(this.options.path, 'libraries', jarInfo.path, jarInfo.name);
+            const processorArguments = (processor.args || [])
+                .map(argument => this.setArgument(argument, profile, config, neoForgeOld))
+                .map(argument => this.computePath(argument))
+                .map(normalizeProcessorArgument);
+            const classPaths = (processor.classpath || []).map(classPath => {
+                const classPathInfo = getPathLibraries(classPath);
+                return path.join(this.options.path, 'libraries', classPathInfo.path, classPathInfo.name);
+            });
+            const mainClass = await this.readJarManifest(jarPath);
+
+            if (!mainClass) {
+                const message = `Impossible de déterminer la classe principale dans le JAR : ${jarPath}`;
+                this.emit('error', message);
+                return { error: message };
+            }
+
+            const result = await new Promise(resolve => {
+                let stderr = '';
+                let settled = false;
+                let childProcess;
+
+                const finish = (error = null) => {
+                    if (settled) return;
+                    settled = true;
+                    if (error) this.emit('error', error);
+                    resolve(error ? { error } : { success: true });
+                };
+
+                try {
+                    childProcess = spawn(javaPath, [
+                        '-classpath',
+                        [jarPath, ...classPaths].join(path.delimiter),
+                        mainClass,
+                        ...processorArguments
+                    ], {
+                        shell: false,
+                        windowsHide: true
+                    });
+                } catch (error) {
+                    finish(`Impossible de démarrer Java pour installer Forge : ${error.message}`);
+                    return;
+                }
+
+                childProcess.stdout.on('data', data => {
+                    this.emit('patch', data.toString('utf-8'));
+                });
+                childProcess.stderr.on('data', data => {
+                    const output = data.toString('utf-8');
+                    stderr = `${stderr}${output}`.slice(-4000);
+                    this.emit('patch', output);
+                });
+                childProcess.once('error', error => {
+                    finish(`Impossible de démarrer Java pour installer Forge : ${error.message}`);
+                });
+                childProcess.once('close', (code, signal) => {
+                    if (code === 0) return finish();
+
+                    const exitReason = code !== null ? `code ${code}` : `signal ${signal || 'inconnu'}`;
+                    const details = stderr.trim();
+                    finish(
+                        `Le patcher Forge s’est terminé avec le ${exitReason}`
+                        + (details ? ` : ${details}` : '.')
+                    );
+                });
+            });
+
+            if (result.error) return result;
+        }
+
+        return { success: true };
+    };
+
+    ForgePatcher.prototype.__fortressPatchedSafeExecution = true;
+    ForgePatcher.prototype.__fortressOriginalPatcher = originalPatcher;
+};
+
+const patchModLoaderErrorHandling = () => {
+    const coreEntry = require.resolve('minecraft-java-core');
+    const coreDirectory = path.dirname(coreEntry);
+    const ForgePatcher = require(path.join(coreDirectory, 'Minecraft-Loader', 'patcher.js')).default;
+    const Forge = require(path.join(coreDirectory, 'Minecraft-Loader', 'loader', 'forge', 'forge.js')).default;
+    const NeoForge = require(path.join(coreDirectory, 'Minecraft-Loader', 'loader', 'neoForge', 'neoForge.js')).default;
+
+    const runPatcher = async function runPatcher(profile, neoForgeOld = true) {
+        if (!profile?.processors?.length) return true;
+
+        const patcher = new ForgePatcher(this.options);
+        let patchError = null;
+
+        patcher.on('patch', data => this.emit('patch', data));
+        patcher.on('error', error => {
+            if (!patchError) patchError = error?.error || error?.message || String(error);
+        });
+
+        try {
+            if (!patcher.check(profile)) {
+                const config = {
+                    java: this.options.loader.config.javaPath,
+                    minecraft: this.options.loader.config.minecraftJar,
+                    minecraftJson: this.options.loader.config.minecraftJson
+                };
+                const result = await patcher.patcher(profile, config, neoForgeOld);
+                if (!patchError && result?.error) patchError = result.error;
+            }
+        } catch (error) {
+            patchError = error?.error || error?.message || String(error);
+        }
+
+        return patchError ? { error: patchError } : true;
+    };
+
+    if (!Forge.prototype.__fortressPatchedPatcherErrors) {
+        Forge.prototype.patchForge = async function patchedForge(profile) {
+            return await runPatcher.call(this, profile, true);
+        };
+        Forge.prototype.__fortressPatchedPatcherErrors = true;
+    }
+
+    if (!NeoForge.prototype.__fortressPatchedPatcherErrors) {
+        NeoForge.prototype.patchneoForge = async function patchedNeoForge(profile, oldAPI) {
+            return await runPatcher.call(this, profile, oldAPI);
+        };
+        NeoForge.prototype.__fortressPatchedPatcherErrors = true;
+    }
+};
+
 const patchLoaderErrorPropagation = () => {
     const coreEntry = require.resolve('minecraft-java-core');
     const Loader = require(path.join(path.dirname(coreEntry), 'Minecraft-Loader', 'index.js')).default;
@@ -474,6 +650,19 @@ const patchLoaderErrorPropagation = () => {
     if (Loader.prototype.__fortressPatchedErrorPropagation) return;
 
     const originalInstall = Loader.prototype.install;
+    const originalEmit = Loader.prototype.emit;
+
+    Loader.prototype.emit = function patchedLoaderEmit(eventName, ...args) {
+        if (eventName === 'error' && args[0] && !(args[0] instanceof Error)) {
+            const payload = args[0];
+            const message = payload?.friendlyMessage || payload?.error || payload?.message || String(payload);
+            const normalizedError = new Error(message);
+            if (typeof payload === 'object') Object.assign(normalizedError, payload);
+            normalizedError.message = message;
+            args[0] = normalizedError;
+        }
+        return originalEmit.call(this, eventName, ...args);
+    };
 
     Loader.prototype.install = async function patchedLoaderInstall(...args) {
         try {
@@ -491,10 +680,13 @@ const patchLoaderErrorPropagation = () => {
 
     Loader.prototype.__fortressPatchedErrorPropagation = true;
     Loader.prototype.__fortressOriginalInstall = originalInstall;
+    Loader.prototype.__fortressOriginalEmit = originalEmit;
 };
 
 patchForgeFetchFallback();
 patchDownloader();
 patchBundleIgnoreVerification();
 patchMinecraftLibraryArtifacts();
+patchForgePatcherExecution();
+patchModLoaderErrorHandling();
 patchLoaderErrorPropagation();

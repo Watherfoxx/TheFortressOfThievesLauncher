@@ -1007,12 +1007,12 @@ class Home {
 
             const formattedDetails = extraDetails
                 .filter(Boolean)
-                .map(detail => `<br><small>${detail}</small>`)
+                .map(detail => `<br><small>${this.escapeHTML(detail)}</small>`)
                 .join('')
 
             popupError.openPopup({
                 title: 'Erreur',
-                content: `${userFacingMessage}${formattedDetails}`,
+                content: `${this.escapeHTML(userFacingMessage)}${formattedDetails}`,
                 color: 'red',
                 options: true
             })
