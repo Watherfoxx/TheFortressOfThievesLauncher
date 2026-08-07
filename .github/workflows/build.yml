@@ -64,19 +64,33 @@ jobs:
         run: npm run build
         shell: bash
 
-      - name: Verify Linux update metadata
-        if: runner.os == 'Linux'
+      - name: Verify uploaded update metadata
+        uses: actions/github-script@v7
         env:
-          GH_TOKEN: ${{ secrets.github_token }}
-        run: |
-          test -s dist/latest-linux.yml
-          grep -q '^version:' dist/latest-linux.yml
-          grep -q 'sha512:' dist/latest-linux.yml
-          grep -q '\.AppImage' dist/latest-linux.yml
-          version="$(node -p "require('./package.json').version")"
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${version}" \
-            --jq '.assets[].name' | grep -Fxq 'latest-linux.yml'
-        shell: bash
+          RELEASE_VERSION: ${{ needs.create-release.outputs.version }}
+          REQUIRED_METADATA: ${{ runner.os == 'Windows' && 'latest.yml' || runner.os == 'macOS' && 'latest-mac.yml' || 'latest-linux.yml' }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const requiredMetadata = process.env.REQUIRED_METADATA
+
+            for (let attempt = 1; attempt <= 24; attempt++) {
+              const { data: release } = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: process.env.RELEASE_VERSION
+              })
+
+              if (release.assets.some(asset => asset.name === requiredMetadata)) {
+                core.info(`${requiredMetadata} est disponible sur la release.`)
+                return
+              }
+
+              core.info(`${requiredMetadata} n'est pas encore visible (tentative ${attempt}/24).`)
+              await new Promise(resolve => setTimeout(resolve, 5000))
+            }
+
+            core.setFailed(`${requiredMetadata} n'a pas été envoyé sur la release.`)
 
   publish-release:
     needs: [create-release, build-launcher]
@@ -94,6 +108,23 @@ jobs:
               repo: context.repo.repo,
               tag: process.env.RELEASE_VERSION
             })
+
+            const requiredAssets = [
+              'latest.yml',
+              'latest-mac.yml',
+              'latest-linux.yml',
+              'The-Fortress-Of-Thieves-win-x64.exe',
+              'The-Fortress-Of-Thieves-mac-x64.zip',
+              'The-Fortress-Of-Thieves-mac-arm64.zip',
+              'The-Fortress-Of-Thieves-linux-x86_64.AppImage'
+            ]
+            const uploadedAssets = new Set(release.assets.map(asset => asset.name))
+            const missingAssets = requiredAssets.filter(asset => !uploadedAssets.has(asset))
+
+            if (missingAssets.length > 0) {
+              core.setFailed(`Release incomplète, fichiers manquants : ${missingAssets.join(', ')}`)
+              return
+            }
 
             await github.rest.repos.updateRelease({
               owner: context.repo.owner,
