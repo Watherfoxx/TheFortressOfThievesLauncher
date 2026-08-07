@@ -8,10 +8,11 @@ permissions:
   contents: write
 
 jobs:
-  create-release:
+  create_release:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.value }}
+      release_id: ${{ steps.create_release.outputs.id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -32,10 +33,11 @@ jobs:
           prerelease: ${{ contains(steps.version.outputs.value, 'beta') || contains(steps.version.outputs.value, 'alpha') }}
 
   build-launcher:
-    needs: create-release
+    needs: create_release
     runs-on: ${{ matrix.os }}
 
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-14, ubuntu-latest, windows-latest]
 
@@ -67,18 +69,23 @@ jobs:
       - name: Verify uploaded update metadata
         uses: actions/github-script@v7
         env:
-          RELEASE_VERSION: ${{ needs.create-release.outputs.version }}
+          RELEASE_ID: ${{ needs.create_release.outputs.release_id }}
           REQUIRED_METADATA: ${{ runner.os == 'Windows' && 'latest.yml' || runner.os == 'macOS' && 'latest-mac.yml' || 'latest-linux.yml' }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const requiredMetadata = process.env.REQUIRED_METADATA
+            const releaseId = Number(process.env.RELEASE_ID)
+            if (!Number.isSafeInteger(releaseId) || releaseId <= 0) {
+              core.setFailed(`Identifiant de release invalide : ${process.env.RELEASE_ID || 'absent'}`)
+              return
+            }
 
             for (let attempt = 1; attempt <= 24; attempt++) {
-              const { data: release } = await github.rest.repos.getReleaseByTag({
+              const { data: release } = await github.rest.repos.getRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                tag: process.env.RELEASE_VERSION
+                release_id: releaseId
               })
 
               if (release.assets.some(asset => asset.name === requiredMetadata)) {
@@ -93,20 +100,27 @@ jobs:
             core.setFailed(`${requiredMetadata} n'a pas été envoyé sur la release.`)
 
   publish-release:
-    needs: [create-release, build-launcher]
+    needs: [create_release, build-launcher]
     runs-on: ubuntu-latest
     steps:
       - name: Publish completed release
         uses: actions/github-script@v7
         env:
-          RELEASE_VERSION: ${{ needs.create-release.outputs.version }}
+          RELEASE_VERSION: ${{ needs.create_release.outputs.version }}
+          RELEASE_ID: ${{ needs.create_release.outputs.release_id }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { data: release } = await github.rest.repos.getReleaseByTag({
+            const releaseId = Number(process.env.RELEASE_ID)
+            if (!Number.isSafeInteger(releaseId) || releaseId <= 0) {
+              core.setFailed(`Identifiant de release invalide : ${process.env.RELEASE_ID || 'absent'}`)
+              return
+            }
+
+            const { data: release } = await github.rest.repos.getRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              tag: process.env.RELEASE_VERSION
+              release_id: releaseId
             })
 
             const requiredAssets = [
