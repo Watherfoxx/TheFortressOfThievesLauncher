@@ -284,7 +284,11 @@ class Settings {
                 if (storage.external === false) return 'SSD interne'
                 return 'SSD'
             }
-            if (storage?.type === 'hdd') return 'HDD'
+            if (storage?.type === 'hdd') {
+                if (storage.external === true) return 'HDD externe'
+                if (storage.external === false) return 'HDD interne'
+                return 'HDD'
+            }
             return 'type de disque indéterminé'
         }
 
@@ -419,7 +423,18 @@ class Settings {
 
         const validateStorage = (destinationPath, useDefaultPath, storage) => {
             if (storage?.type === 'hdd') {
-                showError('Cet emplacement se trouve sur un HDD. Choisissez un SSD pour installer le jeu.')
+                new popup().openPopup({
+                    title: 'HDD détecté — performances fortement réduites',
+                    content: `Cet emplacement se trouve sur un HDD :<br>${this.escapeHTML(destinationPath)}<br><br>Le jeu restera utilisable, mais les temps de démarrage, de chargement du monde et de changement de zone seront nettement plus longs que sur un SSD.<br><br>Vous pourrez également subir davantage de saccades, ainsi que des chargements tardifs des chunks, textures et ressources. L’utilisation d’un SSD, de préférence interne, est fortement recommandée.`,
+                    color: '#ff9800',
+                    buttons: [
+                        {
+                            text: 'Utiliser ce HDD quand même',
+                            action: () => confirmMigration(destinationPath, useDefaultPath, storage)
+                        },
+                        { text: 'Choisir un autre emplacement' }
+                    ]
+                })
                 return
             }
 

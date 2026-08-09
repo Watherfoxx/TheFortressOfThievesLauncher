@@ -82,13 +82,6 @@ ipcMain.handle('game-directory-migrate', async (event, options) => {
         throw new Error('Le jeu ou son téléchargement est actuellement en cours. Fermez-le avant de déplacer le dossier.')
     }
 
-    const storage = await detectStorageMedia(options.destinationPath)
-    if (storage.type === 'hdd') {
-        const error = new Error('Cet emplacement se trouve sur un HDD. Le jeu doit être installé sur un SSD.')
-        error.code = 'HDD_NOT_ALLOWED'
-        throw error
-    }
-
     return await gameDirectoryMigration.migrate(options, progress => {
         if (!event.sender.isDestroyed()) {
             event.sender.send('game-directory-migration-progress', progress)
