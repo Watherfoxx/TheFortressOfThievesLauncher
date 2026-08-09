@@ -831,9 +831,6 @@ class Home {
                 '-XX:+ZGenerational' // Ajouté pour la v3 de Distant Horizon
             ]
         }
-
-
-        console.log(opt);
         const crashReportSnapshot = this.createCrashReportSnapshot(this.getInstanceReportPaths(baseDataPath, instanceFolderName))
         const instancePath = path.join(baseDataPath, 'instances', instanceFolderName)
         const gameLogCapture = this.createGameLogCapture(instancePath)

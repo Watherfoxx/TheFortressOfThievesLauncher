@@ -278,6 +278,16 @@ class Settings {
             })
         }
 
+        const storageDescription = storage => {
+            if (storage?.type === 'ssd') {
+                if (storage.external === true) return 'SSD externe'
+                if (storage.external === false) return 'SSD interne'
+                return 'SSD'
+            }
+            if (storage?.type === 'hdd') return 'HDD'
+            return 'type de disque indéterminé'
+        }
+
         const setMigrationActive = active => {
             migrationActive = active
             progressBox.hidden = !active
@@ -380,15 +390,22 @@ class Settings {
             }
         }
 
-        const confirmMigration = (destinationPath, useDefaultPath = false) => {
+        const confirmMigration = (destinationPath, useDefaultPath = false, storage = null) => {
             if (this.samePath(currentPath, destinationPath)) {
                 showError('Le jeu utilise déjà cet emplacement.')
                 return
             }
 
+            const storageNotice = storage
+                ? `<br><br>Support détecté : ${this.escapeHTML(storageDescription(storage))}.`
+                : ''
+            const externalNotice = storage?.type === 'ssd' && storage.external === true
+                ? '<br>Un SSD interne reste recommandé pour obtenir les meilleures performances.'
+                : ''
+
             new popup().openPopup({
                 title: 'Déplacer le dossier du jeu',
-                content: `Tout le contenu sera déplacé vers :<br>${this.escapeHTML(destinationPath)}<br><br>N’éteignez pas le launcher pendant l’opération.`,
+                content: `Tout le contenu sera déplacé vers :<br>${this.escapeHTML(destinationPath)}${storageNotice}${externalNotice}<br><br>N’éteignez pas le launcher pendant l’opération.`,
                 color: 'var(--color)',
                 buttons: [
                     {
@@ -398,6 +415,31 @@ class Settings {
                     { text: 'Annuler' }
                 ]
             })
+        }
+
+        const validateStorage = (destinationPath, useDefaultPath, storage) => {
+            if (storage?.type === 'hdd') {
+                showError('Cet emplacement se trouve sur un HDD. Choisissez un SSD pour installer le jeu.')
+                return
+            }
+
+            if (storage?.type !== 'ssd') {
+                new popup().openPopup({
+                    title: 'Type de disque indéterminé',
+                    content: `Le launcher ne peut pas confirmer que cet emplacement se trouve sur un SSD :<br>${this.escapeHTML(destinationPath)}<br><br>Il peut s’agir d’un SSD non reconnu, d’un disque USB, RAID, virtuel ou réseau. Les performances ne sont pas garanties.`,
+                    color: 'var(--color)',
+                    buttons: [
+                        {
+                            text: 'Continuer quand même',
+                            action: () => confirmMigration(destinationPath, useDefaultPath, storage)
+                        },
+                        { text: 'Choisir un autre emplacement' }
+                    ]
+                })
+                return
+            }
+
+            confirmMigration(destinationPath, useDefaultPath, storage)
         }
 
         ipcRenderer.on('game-directory-migration-progress', (_, progress) => {
@@ -418,13 +460,22 @@ class Settings {
 
         moveButton.addEventListener('click', async () => {
             if (gameActive) return showError('Fermez le jeu avant de déplacer son dossier.')
-            const selection = await ipcRenderer.invoke('game-directory-select', { currentPath })
-            if (!selection.canceled) confirmMigration(selection.destinationPath, false)
+            try {
+                const selection = await ipcRenderer.invoke('game-directory-select', { currentPath })
+                if (!selection.canceled) validateStorage(selection.destinationPath, false, selection.storage)
+            } catch (error) {
+                showError(error)
+            }
         })
 
-        defaultButton.addEventListener('click', () => {
+        defaultButton.addEventListener('click', async () => {
             if (gameActive) return showError('Fermez le jeu avant de déplacer son dossier.')
-            confirmMigration(defaultPath, true)
+            try {
+                const storage = await ipcRenderer.invoke('game-directory-storage-info', defaultPath)
+                validateStorage(defaultPath, true, storage)
+            } catch (error) {
+                showError(error)
+            }
         })
 
         refreshControls()

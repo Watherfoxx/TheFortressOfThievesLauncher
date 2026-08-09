@@ -13,6 +13,7 @@ const fs = require('fs');
 const UpdateWindow = require("./assets/js/windows/updateWindow.js");
 const MainWindow = require("./assets/js/windows/mainWindow.js");
 const { GameDirectoryMigrationManager } = require('./gameDirectory.js')
+const { detectStorageMedia } = require('./storageMedia.js')
 
 let dev = process.env.NODE_ENV === 'dev';
 let gameActivityActive = false
@@ -68,12 +69,24 @@ ipcMain.handle('game-directory-select', async (_, { currentPath }) => {
         ? selectedPath
         : path.join(selectedPath, gameFolderName)
 
-    return { canceled: false, destinationPath }
+    const storage = await detectStorageMedia(selectedPath)
+    return { canceled: false, destinationPath, storage }
+})
+
+ipcMain.handle('game-directory-storage-info', async (_, targetPath) => {
+    return await detectStorageMedia(targetPath)
 })
 
 ipcMain.handle('game-directory-migrate', async (event, options) => {
     if (gameActivityActive) {
         throw new Error('Le jeu ou son téléchargement est actuellement en cours. Fermez-le avant de déplacer le dossier.')
+    }
+
+    const storage = await detectStorageMedia(options.destinationPath)
+    if (storage.type === 'hdd') {
+        const error = new Error('Cet emplacement se trouve sur un HDD. Le jeu doit être installé sur un SSD.')
+        error.code = 'HDD_NOT_ALLOWED'
+        throw error
     }
 
     return await gameDirectoryMigration.migrate(options, progress => {
