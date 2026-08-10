@@ -12,6 +12,7 @@ const ForgePatcher = require(path.join(coreDirectory, 'Minecraft-Loader', 'patch
 const Forge = require(path.join(coreDirectory, 'Minecraft-Loader', 'loader', 'forge', 'forge.js')).default
 const Loader = require(path.join(coreDirectory, 'Minecraft-Loader', 'index.js')).default
 const JavaDownloader = require(path.join(coreDirectory, 'Minecraft', 'Minecraft-Java.js')).default
+const { Launch } = require('minecraft-java-core')
 
 test('réutilise le véritable exécutable du runtime Java déjà extrait', async t => {
     const temporaryPath = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'fortress-java-runtime-'))
@@ -52,6 +53,54 @@ test('Forge complète automatiquement l’extension .exe manquante sous Windows'
     const patcher = new ForgePatcher({ path: temporaryPath })
     const result = await patcher.patcher({ processors: [] }, {
         java: javaPathWithoutExtension,
+        minecraft: 'minecraft.jar',
+        minecraftJson: 'minecraft.json'
+    })
+
+    assert.deepEqual(result, { success: true })
+})
+
+test('un chemin Java configuré mais disparu revient au runtime intégré', async t => {
+    const launch = new Launch()
+    let receivedOptions = null
+
+    launch.start = async function captureOptions() {
+        receivedOptions = this.options
+    }
+
+    await launch.Launch({
+        authenticator: { name: 'Offline' },
+        java: {
+            path: path.join(os.tmpdir(), 'java-qui-n-existe-plus', 'bin', 'java.exe'),
+            version: 21,
+            type: 'jre'
+        }
+    })
+
+    assert.equal(receivedOptions.java.path, null)
+})
+
+test('Forge retrouve Java dans un runtime Windows profondément imbriqué', {
+    skip: process.platform !== 'win32'
+}, async t => {
+    const temporaryPath = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'fortress-forge-runtime-'))
+    t.after(() => fs.promises.rm(temporaryPath, { recursive: true, force: true }))
+
+    const executablePath = path.join(
+        temporaryPath,
+        'runtime',
+        'jre-21',
+        'archive',
+        'zulu21',
+        'bin',
+        'java.exe'
+    )
+    await fs.promises.mkdir(path.dirname(executablePath), { recursive: true })
+    await fs.promises.writeFile(executablePath, 'java-runtime')
+
+    const patcher = new ForgePatcher({ path: temporaryPath })
+    const result = await patcher.patcher({ processors: [] }, {
+        java: path.join(temporaryPath, 'ancien-runtime', 'bin', 'java.exe'),
         minecraft: 'minecraft.jar',
         minecraftJson: 'minecraft.json'
     })

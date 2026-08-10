@@ -57,14 +57,6 @@ class Home {
         document.dispatchEvent(new CustomEvent('launcher-game-activity-changed', { detail: false }))
     }
 
-    async finishGameActivity(callback) {
-        try {
-            await callback()
-        } finally {
-            await this.endGameActivity()
-        }
-    }
-
     createGameLogCapture(instancePath) {
         const logsDirectory = path.join(instancePath, 'logs')
         const latestLogPath = path.join(logsDirectory, 'latest.log')
@@ -489,6 +481,7 @@ class Home {
     async init(config) {
         this.config = config;
         this.db = new database();
+        this.isGameLaunchPending = false
         this.news()
         this.socialLick()
         this.instancesSelect()
@@ -732,13 +725,39 @@ class Home {
     }
 
     async startGame() {
-        const microphoneGranted = await this.ensureMicrophoneAccessForMac()
-        if (!microphoneGranted) return
+        if (this.isGameLaunchPending) return
+        this.isGameLaunchPending = true
 
-        const activityStarted = await this.beginGameActivity()
-        if (!activityStarted) return
+        let activityStarted = false
+        let launchFinished = false
+
+        const finishLaunchActivity = async callback => {
+            if (launchFinished) return
+            launchFinished = true
+
+            try {
+                await callback()
+            } finally {
+                if (activityStarted) {
+                    activityStarted = false
+                    await this.endGameActivity()
+                }
+                this.isGameLaunchPending = false
+            }
+        }
 
         try {
+        const microphoneGranted = await this.ensureMicrophoneAccessForMac()
+        if (!microphoneGranted) {
+            this.isGameLaunchPending = false
+            return
+        }
+
+        activityStarted = await this.beginGameActivity()
+        if (!activityStarted) {
+            this.isGameLaunchPending = false
+            return
+        }
 
         let launch = new Launch()
         let configClient = await this.db.readData('configClient')
@@ -759,7 +778,7 @@ class Home {
                     options: true
                 })
             }
-            await this.endGameActivity()
+            await finishLaunchActivity(async () => {})
             return
         }
 
@@ -903,7 +922,7 @@ class Home {
             console.log(e);
         })
 
-        launch.on('close', async code => this.finishGameActivity(async () => {
+        launch.on('close', async code => finishLaunchActivity(async () => {
             try {
                 this.finalizeGameLogCapture(gameLogCapture)
             } catch (logError) {
@@ -961,7 +980,7 @@ class Home {
             }
         }));
 
-        launch.on('error', async err => this.finishGameActivity(async () => {
+        launch.on('error', async err => finishLaunchActivity(async () => {
             try {
                 this.finalizeGameLogCapture(gameLogCapture)
             } catch (logError) {
@@ -1027,7 +1046,11 @@ class Home {
 
         launch.Launch(opt);
         } catch (error) {
-            await this.endGameActivity()
+            if (activityStarted) {
+                activityStarted = false
+                await this.endGameActivity()
+            }
+            this.isGameLaunchPending = false
             console.error('[Launcher] Impossible de préparer le démarrage du jeu :', error)
             new popup().openPopup({
                 title: 'Erreur',

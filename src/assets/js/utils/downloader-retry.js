@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { Downloader } = require('minecraft-java-core');
+const { Downloader, Launch } = require('minecraft-java-core');
 const nodeFetch = require('node-fetch');
 const { Readable } = require('stream');
 let WebReadableStream;
@@ -217,12 +217,25 @@ const patchDownloader = () => {
         };
 
         let resolvePromise = null;
+        let rejectPromise = null;
+        let fatalError = null;
         const tryResolve = () => {
-            if (!resolvePromise) return;
-            if (hasFatalError || (completed >= totalFiles && active === 0 && queue.length === 0)) {
+            if (!resolvePromise || !rejectPromise) return;
+
+            if (hasFatalError) {
+                clearInterval(throughputInterval);
+                const rejecter = rejectPromise;
+                resolvePromise = null;
+                rejectPromise = null;
+                rejecter(fatalError);
+                return;
+            }
+
+            if (completed >= totalFiles && active === 0 && queue.length === 0) {
                 clearInterval(throughputInterval);
                 const resolver = resolvePromise;
                 resolvePromise = null;
+                rejectPromise = null;
                 resolver();
             }
         };
@@ -242,7 +255,7 @@ const patchDownloader = () => {
             }
 
             let bytesThisAttempt = 0;
-            const writer = fs.createWriteStream(file.path, { flags: 'w', mode: 0o777 });
+            let writer = null;
             const controller = new AbortController();
             activeControllers.add(controller);
             const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -261,7 +274,7 @@ const patchDownloader = () => {
 
             const handleFailure = (error) => {
                 clearTimeout(timeoutId);
-                writer.destroy();
+                writer?.destroy();
                 cleanupPartial();
                 activeControllers.delete(controller);
 
@@ -276,7 +289,12 @@ const patchDownloader = () => {
                 active = Math.max(0, active - 1);
 
                 const formattedError = formatError(error, file);
+                Object.defineProperty(formattedError, '__fortressErrorEmitted', {
+                    value: true,
+                    enumerable: false
+                });
                 hasFatalError = true;
+                fatalError = formattedError;
                 completed = Math.min(totalFiles, completed + 1);
                 abortAllActive();
                 queue.length = 0;
@@ -293,6 +311,7 @@ const patchDownloader = () => {
                     throw new Error(`Échec du téléchargement (${response.status} ${response.statusText})`);
                 }
 
+                writer = fs.createWriteStream(file.path, { flags: 'w', mode: 0o777 });
                 const stream = toNodeStream(response.body);
                 stream.on('data', (chunk) => {
                     bytesThisAttempt += chunk.length;
@@ -318,14 +337,38 @@ const patchDownloader = () => {
             }
         };
 
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             resolvePromise = resolve;
+            rejectPromise = reject;
             pumpQueue();
         });
     };
 
     Downloader.prototype.__fortressPatchedRetry = true;
     Downloader.prototype.__fortressOriginalDownloadFileMultiple = originalDownloadFileMultiple;
+};
+
+const patchLaunchErrorHandling = () => {
+    if (Launch.prototype.__fortressPatchedTerminalErrors) return;
+
+    const originalStart = Launch.prototype.start;
+
+    Launch.prototype.start = async function patchedLaunchStart(...args) {
+        try {
+            return await originalStart.apply(this, args);
+        } catch (error) {
+            // The downloader forwards its fatal error to Launch before rejecting.
+            // Swallow that already-reported rejection so the original launch chain
+            // stops without producing an unhandled rejection or a duplicate popup.
+            if (!error?.__fortressErrorEmitted) {
+                this.emit('error', formatError(error));
+            }
+            return null;
+        }
+    };
+
+    Launch.prototype.__fortressPatchedTerminalErrors = true;
+    Launch.prototype.__fortressOriginalStart = originalStart;
 };
 
 const patchBundleIgnoreVerification = () => {
@@ -517,32 +560,60 @@ const resolveExistingJavaExecutable = (candidatePath) => {
 const findBundledJavaExecutable = (runtimeFolder) => {
     if (!fs.existsSync(runtimeFolder)) return null;
 
-    let runtimeEntries;
-    try {
-        runtimeEntries = fs.readdirSync(runtimeFolder, { withFileTypes: true });
-    } catch (error) {
-        return null;
-    }
+    const directories = [{ directory: runtimeFolder, depth: 0 }];
+    const maximumDepth = 5;
 
-    const runtimeDirectories = [runtimeFolder, ...runtimeEntries
-        .filter(entry => entry.isDirectory())
-        .map(entry => path.join(runtimeFolder, entry.name))];
-
-    for (const runtimeDirectory of runtimeDirectories) {
+    while (directories.length > 0) {
+        const { directory, depth } = directories.shift();
         const candidates = process.platform === 'win32'
-            ? [
-                path.join(runtimeDirectory, 'bin', 'java.exe'),
-                path.join(runtimeDirectory, 'bin', 'javaw.exe')
-            ]
-            : [
-                path.join(runtimeDirectory, 'bin', 'java'),
-                path.join(runtimeDirectory, 'Contents', 'Home', 'bin', 'java')
-            ];
+            ? [path.join(directory, 'java.exe'), path.join(directory, 'javaw.exe')]
+            : [path.join(directory, 'java')];
         const executable = candidates.find(isUsableJavaExecutable);
         if (executable) return executable;
+        if (depth >= maximumDepth) continue;
+
+        try {
+            for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+                if (entry.isDirectory()) {
+                    directories.push({ directory: path.join(directory, entry.name), depth: depth + 1 });
+                }
+            }
+        } catch (error) {
+            // A partially extracted or protected directory must not prevent the
+            // launcher from checking the other installed runtimes.
+        }
     }
 
     return null;
+};
+
+const patchConfiguredJavaFallback = () => {
+    if (Launch.prototype.__fortressPatchedConfiguredJavaFallback) return;
+
+    const originalLaunch = Launch.prototype.Launch;
+
+    Launch.prototype.Launch = function patchedConfiguredJavaFallback(options) {
+        const configuredPath = options?.java?.path;
+        if (!configuredPath) return originalLaunch.call(this, options);
+
+        const executable = resolveExistingJavaExecutable(configuredPath);
+        const normalizedOptions = {
+            ...options,
+            java: {
+                ...options.java,
+                path: executable
+            }
+        };
+
+        if (!executable) {
+            console.warn(`[Launcher] Le chemin Java configuré n'existe plus (${configuredPath}). Utilisation du runtime intégré.`);
+        }
+
+        return originalLaunch.call(this, normalizedOptions);
+    };
+
+    Launch.prototype.__fortressPatchedConfiguredJavaFallback = true;
+    Launch.prototype.__fortressOriginalLaunch = originalLaunch;
 };
 
 const patchJavaRuntimeExecutable = () => {
@@ -586,7 +657,9 @@ const patchForgePatcherExecution = () => {
 
     ForgePatcher.prototype.patcher = async function patchedForgePatcher(profile, config, neoForgeOld = true) {
         const configuredJavaPath = config?.java ? path.resolve(config.java) : null;
-        const javaPath = resolveExistingJavaExecutable(configuredJavaPath) || configuredJavaPath;
+        const javaPath = resolveExistingJavaExecutable(configuredJavaPath)
+            || findBundledJavaExecutable(path.resolve(this.options.path, 'runtime'))
+            || configuredJavaPath;
 
         if (!javaPath || !fs.existsSync(javaPath)) {
             const message = `L’exécutable Java requis par Forge est introuvable : ${javaPath || 'chemin non défini'}`;
@@ -785,8 +858,10 @@ const patchLoaderErrorPropagation = () => {
 
 patchForgeFetchFallback();
 patchDownloader();
+patchLaunchErrorHandling();
 patchBundleIgnoreVerification();
 patchMinecraftLibraryArtifacts();
+patchConfiguredJavaFallback();
 patchJavaRuntimeExecutable();
 patchForgePatcherExecution();
 patchModLoaderErrorHandling();
