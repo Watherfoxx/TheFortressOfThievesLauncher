@@ -2,6 +2,7 @@ const fs = require("fs");
 
 const builder = require('electron-builder')
 const JavaScriptObfuscator = require('javascript-obfuscator');
+const obfuscatorOptions = require('./obfuscator-options.js');
 const nodeFetch = require('node-fetch')
 const png2icons = require('png2icons');
 const Jimp = require('jimp');
@@ -52,7 +53,7 @@ class Index {
                 if (this.obf) {
                     await new Promise((resolve) => {
                         console.log(`Obfuscate ${path}`);
-                        let obf = JavaScriptObfuscator.obfuscate(code, { optionsPreset: 'medium-obfuscation', disableConsoleOutput: false });
+                        let obf = JavaScriptObfuscator.obfuscate(code, obfuscatorOptions);
                         resolve(fs.writeFileSync(`${folder}/${fileName}`, obf.getObfuscatedCode(), { encoding: "utf-8" }));
                     })
                 } else {

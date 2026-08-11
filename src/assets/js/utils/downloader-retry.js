@@ -89,6 +89,7 @@ const formatError = (error, file) => {
     if (typeof error === 'object') {
         const formatted = { ...error };
         const originalMessage = formatted.error || error.message || error?.cause?.message || error.toString();
+        const originalStack = typeof error.stack === 'string' ? error.stack : null;
         const fallback = 'Une erreur inconnue est survenue lors du téléchargement.';
         const friendly = getFriendlyMessage(error);
 
@@ -106,6 +107,10 @@ const formatError = (error, file) => {
 
         if (file?.path) {
             formatted.file = file.path;
+        }
+
+        if (!formatted.details && originalStack && originalStack !== originalMessage) {
+            formatted.details = originalStack;
         }
 
         return formatted;
@@ -176,8 +181,11 @@ const patchDownloader = () => {
     };
 
     const expectedResponseSize = response => {
-        if (response?.headers?.get?.('content-encoding')) return 0;
-        const value = Number(response?.headers?.get?.('content-length'));
+        const getHeader = response && response.headers && typeof response.headers.get === 'function'
+            ? response.headers.get.bind(response.headers)
+            : null;
+        if (!getHeader || getHeader('content-encoding')) return 0;
+        const value = Number(getHeader('content-length'));
         return Number.isFinite(value) && value > 0 ? value : 0;
     };
 
@@ -211,7 +219,7 @@ const patchDownloader = () => {
         const expectedSize = Number.isFinite(metadataSize) && metadataSize > 0
             ? metadataSize
             : responseSize;
-        onResponse?.(expectedSize);
+        if (typeof onResponse === 'function') onResponse(expectedSize);
 
         const expectedSha1 = typeof file.sha1 === 'string' && file.sha1.length > 0
             ? file.sha1.toLowerCase()
@@ -230,8 +238,8 @@ const patchDownloader = () => {
                 const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding);
                 resetInactivityTimeout();
                 receivedSize += buffer.length;
-                hash?.update(buffer);
-                onChunk?.(buffer.length);
+                if (hash) hash.update(buffer);
+                if (typeof onChunk === 'function') onChunk(buffer.length);
                 callback(null, buffer);
             }
         });
