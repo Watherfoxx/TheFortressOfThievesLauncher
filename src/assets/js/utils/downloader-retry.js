@@ -7,10 +7,12 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { Downloader, Launch } = require('minecraft-java-core');
 const nodeFetch = require('node-fetch');
-const { Readable } = require('stream');
+const { Readable, Transform } = require('stream');
+const { pipeline } = require('stream/promises');
 let WebReadableStream;
 
 try {
@@ -128,7 +130,9 @@ const formatError = (error, file) => {
 const patchDownloader = () => {
     if (Downloader.prototype.__fortressPatchedRetry) return;
 
+    const originalDownloadFile = Downloader.prototype.downloadFile;
     const originalDownloadFileMultiple = Downloader.prototype.downloadFileMultiple;
+    const maximumAttempts = 3;
 
     const toNodeStream = (webStream) => {
         if (!webStream) return Readable.from([]);
@@ -159,6 +163,170 @@ const patchDownloader = () => {
         return webStream;
     };
 
+    const waitBeforeRetry = attempt => new Promise(resolve => {
+        setTimeout(resolve, 400 * (2 ** (attempt - 1)));
+    });
+
+    const removeFile = filePath => {
+        try {
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        } catch (error) {
+            // The original download error is more useful than a cleanup error.
+        }
+    };
+
+    const expectedResponseSize = response => {
+        if (response?.headers?.get?.('content-encoding')) return 0;
+        const value = Number(response?.headers?.get?.('content-length'));
+        return Number.isFinite(value) && value > 0 ? value : 0;
+    };
+
+    const downloadVerifiedFile = async ({
+        file,
+        timeout,
+        controller,
+        onResponse,
+        onChunk
+    }) => {
+        const temporaryPath = `${file.path}.part`;
+        removeFile(temporaryPath);
+
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        let response;
+        try {
+            response = await fetch(file.url, {
+                signal: controller.signal,
+                cache: 'no-store'
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
+
+        if (!response?.ok || !response.body) {
+            throw new Error(`Échec du téléchargement (${response?.status || 'sans réponse'} ${response?.statusText || ''})`.trim());
+        }
+
+        const metadataSize = Number(file.size);
+        const responseSize = expectedResponseSize(response);
+        const expectedSize = Number.isFinite(metadataSize) && metadataSize > 0
+            ? metadataSize
+            : responseSize;
+        onResponse?.(expectedSize);
+
+        const expectedSha1 = typeof file.sha1 === 'string' && file.sha1.length > 0
+            ? file.sha1.toLowerCase()
+            : null;
+        const hash = expectedSha1 ? crypto.createHash('sha1') : null;
+        let receivedSize = 0;
+        let inactivityTimeout = null;
+        const resetInactivityTimeout = () => {
+            clearTimeout(inactivityTimeout);
+            inactivityTimeout = setTimeout(() => controller.abort(), timeout);
+        };
+        resetInactivityTimeout();
+
+        const meter = new Transform({
+            transform(chunk, encoding, callback) {
+                const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding);
+                resetInactivityTimeout();
+                receivedSize += buffer.length;
+                hash?.update(buffer);
+                onChunk?.(buffer.length);
+                callback(null, buffer);
+            }
+        });
+
+        try {
+            await pipeline(
+                toNodeStream(response.body),
+                meter,
+                fs.createWriteStream(temporaryPath, { flags: 'w', mode: 0o777 })
+            );
+
+            if (expectedSize > 0 && receivedSize !== expectedSize) {
+                throw new Error(`Fichier incomplet : ${receivedSize} octets reçus sur ${expectedSize}.`);
+            }
+
+            if (expectedSha1) {
+                const receivedSha1 = hash.digest('hex').toLowerCase();
+                if (receivedSha1 !== expectedSha1) {
+                    throw new Error(`Somme SHA-1 incorrecte : ${receivedSha1} au lieu de ${expectedSha1}.`);
+                }
+            }
+
+            const diskSize = fs.statSync(temporaryPath).size;
+            if (diskSize !== receivedSize) {
+                throw new Error(`Écriture disque incomplète : ${diskSize} octets écrits sur ${receivedSize}.`);
+            }
+
+            removeFile(file.path);
+            fs.renameSync(temporaryPath, file.path);
+
+            const promotedSize = fs.statSync(file.path).size;
+            if (promotedSize !== receivedSize) {
+                removeFile(file.path);
+                throw new Error(`Validation finale impossible : ${promotedSize} octets disponibles sur ${receivedSize}.`);
+            }
+            return receivedSize;
+        } catch (error) {
+            removeFile(temporaryPath);
+            throw error;
+        } finally {
+            clearTimeout(inactivityTimeout);
+        }
+    };
+
+    const markAndEmitTerminalError = (downloader, error) => {
+        if (downloader.listenerCount('error') === 0) return error;
+
+        Object.defineProperty(error, '__fortressErrorEmitted', {
+            value: true,
+            enumerable: false
+        });
+        downloader.emit('error', error);
+        return error;
+    };
+
+    Downloader.prototype.downloadFile = async function patchedDownloadFile(url, directory, fileName) {
+        if (!fs.existsSync(directory)) fs.mkdirSync(directory, { recursive: true, mode: 0o777 });
+
+        const file = {
+            url,
+            folder: directory,
+            path: path.join(directory, fileName),
+            name: fileName
+        };
+        let lastError = null;
+
+        for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+            let downloadedThisAttempt = 0;
+            let totalSize = 0;
+            const controller = new AbortController();
+
+            try {
+                await downloadVerifiedFile({
+                    file,
+                    timeout: 10000,
+                    controller,
+                    onResponse: expectedSize => { totalSize = expectedSize; },
+                    onChunk: chunkSize => {
+                        downloadedThisAttempt += chunkSize;
+                        this.emit('progress', downloadedThisAttempt, totalSize);
+                    }
+                });
+                return;
+            } catch (error) {
+                lastError = error;
+                removeFile(file.path);
+                if (attempt < maximumAttempts) await waitBeforeRetry(attempt);
+            }
+        }
+
+        const formattedError = formatError(lastError, file);
+        markAndEmitTerminalError(this, formattedError);
+        throw formattedError;
+    };
+
     Downloader.prototype.downloadFileMultiple = async function patchedDownloadFileMultiple(
         files,
         size,
@@ -169,18 +337,16 @@ const patchDownloader = () => {
             return Promise.resolve();
         }
 
-        limit = Math.max(1, limit);
-        const queue = files.map((file) => ({ ...file }));
-        const totalFiles = queue.length;
+        limit = Math.min(Math.max(1, limit), files.length);
+        const queue = files.map(file => ({ ...file }));
 
         let downloaded = 0;
-        let active = 0;
-        let completed = 0;
+        let queueIndex = 0;
         let previousDownloaded = 0;
         let lastTick = Date.now();
         const recentSpeeds = [];
         const activeControllers = new Set();
-        let hasFatalError = false;
+        let fatalError = null;
 
         const updateThroughput = () => {
             const now = Date.now();
@@ -216,135 +382,73 @@ const patchDownloader = () => {
             activeControllers.clear();
         };
 
-        let resolvePromise = null;
-        let rejectPromise = null;
-        let fatalError = null;
-        const tryResolve = () => {
-            if (!resolvePromise || !rejectPromise) return;
-
-            if (hasFatalError) {
-                clearInterval(throughputInterval);
-                const rejecter = rejectPromise;
-                resolvePromise = null;
-                rejectPromise = null;
-                rejecter(fatalError);
-                return;
-            }
-
-            if (completed >= totalFiles && active === 0 && queue.length === 0) {
-                clearInterval(throughputInterval);
-                const resolver = resolvePromise;
-                resolvePromise = null;
-                rejectPromise = null;
-                resolver();
-            }
-        };
-
-        const pumpQueue = () => {
-            while (active < limit && queue.length > 0) {
-                const nextFile = queue.shift();
-                active += 1;
-                processFile(nextFile);
-            }
-            tryResolve();
-        };
-
-        const processFile = async (file) => {
+        const downloadWithRetry = async file => {
             if (!fs.existsSync(file.folder)) {
                 fs.mkdirSync(file.folder, { recursive: true, mode: 0o777 });
             }
 
-            let bytesThisAttempt = 0;
-            let writer = null;
-            const controller = new AbortController();
-            activeControllers.add(controller);
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
+            let lastError = null;
+            for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+                if (fatalError) throw fatalError;
 
-            const cleanupPartial = () => {
-                if (bytesThisAttempt > 0) {
-                    downloaded = Math.max(0, downloaded - bytesThisAttempt);
-                    bytesThisAttempt = 0;
-                }
+                let downloadedThisAttempt = 0;
+                const controller = new AbortController();
+                activeControllers.add(controller);
+
                 try {
-                    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-                } catch (e) {
-                    // Ignore cleanup errors to avoid masking the original failure.
-                }
-            };
-
-            const handleFailure = (error) => {
-                clearTimeout(timeoutId);
-                writer?.destroy();
-                cleanupPartial();
-                activeControllers.delete(controller);
-
-                if (hasFatalError) {
-                    active = Math.max(0, active - 1);
-                    completed = Math.min(totalFiles, completed + 1);
-                    pumpQueue();
-                    tryResolve();
-                    return;
-                }
-
-                active = Math.max(0, active - 1);
-
-                const formattedError = formatError(error, file);
-                Object.defineProperty(formattedError, '__fortressErrorEmitted', {
-                    value: true,
-                    enumerable: false
-                });
-                hasFatalError = true;
-                fatalError = formattedError;
-                completed = Math.min(totalFiles, completed + 1);
-                abortAllActive();
-                queue.length = 0;
-                this.emit('error', formattedError);
-                pumpQueue();
-                tryResolve();
-            };
-
-            try {
-                const response = await fetch(file.url, { signal: controller.signal });
-                clearTimeout(timeoutId);
-
-                if (!response.ok || !response.body) {
-                    throw new Error(`Échec du téléchargement (${response.status} ${response.statusText})`);
-                }
-
-                writer = fs.createWriteStream(file.path, { flags: 'w', mode: 0o777 });
-                const stream = toNodeStream(response.body);
-                stream.on('data', (chunk) => {
-                    bytesThisAttempt += chunk.length;
-                    downloaded += chunk.length;
-                    this.emit('progress', downloaded, size, file.type);
-                    writer.write(chunk);
-                });
-
-                stream.on('end', () => {
-                    writer.end();
+                    await downloadVerifiedFile({
+                        file,
+                        timeout,
+                        controller,
+                        onChunk: chunkSize => {
+                            downloadedThisAttempt += chunkSize;
+                            downloaded += chunkSize;
+                            this.emit('progress', downloaded, size, file.type);
+                        }
+                    });
                     activeControllers.delete(controller);
-                    active = Math.max(0, active - 1);
-                    completed = Math.min(totalFiles, completed + 1);
-                    pumpQueue();
-                    tryResolve();
-                });
+                    return;
+                } catch (error) {
+                    activeControllers.delete(controller);
+                    downloaded = Math.max(0, downloaded - downloadedThisAttempt);
+                    removeFile(file.path);
+                    lastError = error;
 
-                stream.on('error', (err) => {
-                    handleFailure(err);
-                });
-            } catch (error) {
-                handleFailure(error);
+                    if (fatalError) throw fatalError;
+                    if (attempt < maximumAttempts) await waitBeforeRetry(attempt);
+                }
+            }
+
+            throw lastError;
+        };
+
+        const worker = async () => {
+            while (!fatalError && queueIndex < queue.length) {
+                const file = queue[queueIndex++];
+                try {
+                    await downloadWithRetry(file);
+                } catch (error) {
+                    if (!fatalError) {
+                        fatalError = formatError(error, file);
+                        markAndEmitTerminalError(this, fatalError);
+                        abortAllActive();
+                    }
+                }
             }
         };
 
-        return new Promise((resolve, reject) => {
-            resolvePromise = resolve;
-            rejectPromise = reject;
-            pumpQueue();
-        });
+        try {
+            await Promise.all(Array.from({ length: limit }, () => worker()));
+        } finally {
+            clearInterval(throughputInterval);
+        }
+
+        if (fatalError) throw fatalError;
+        this.emit('progress', size, size, undefined);
     };
 
     Downloader.prototype.__fortressPatchedRetry = true;
+    Downloader.prototype.__fortressOriginalDownloadFile = originalDownloadFile;
     Downloader.prototype.__fortressOriginalDownloadFileMultiple = originalDownloadFileMultiple;
 };
 
@@ -632,13 +736,64 @@ const patchJavaRuntimeExecutable = () => {
 
         if (existingExecutable) return { files: [], path: existingExecutable };
 
-        const result = await originalGetJavaOther.call(this, jsonVersion, versionDownload);
-        if (!result || result.error) return result;
+        const runtimeRoot = path.resolve(this.options.path, 'runtime');
+        const relativeRuntimePath = path.relative(runtimeRoot, runtimeFolder);
+        const safeRuntimeFolder = relativeRuntimePath
+            && !relativeRuntimePath.startsWith('..')
+            && !path.isAbsolute(relativeRuntimePath);
+        let lastError = null;
 
-        const executable = resolveExistingJavaExecutable(result.path)
-            || findBundledJavaExecutable(runtimeFolder);
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+            if (attempt === 2) {
+                if (!safeRuntimeFolder) {
+                    return {
+                        files: [],
+                        path: '',
+                        error: true,
+                        message: `Le dossier du runtime Java n'est pas sûr : ${runtimeFolder}`
+                    };
+                }
 
-        return executable ? { ...result, path: executable } : result;
+                try {
+                    fs.rmSync(runtimeFolder, { recursive: true, force: true });
+                } catch (cleanupError) {
+                    return {
+                        files: [],
+                        path: '',
+                        error: true,
+                        message: `Impossible de supprimer le runtime Java incomplet : ${cleanupError.message}`
+                    };
+                }
+            }
+
+            let result;
+            try {
+                const getJavaOther = JavaDownloader.prototype.__fortressOriginalGetJavaOther;
+                result = await getJavaOther.call(this, jsonVersion, versionDownload);
+            } catch (error) {
+                lastError = error;
+                continue;
+            }
+
+            if (!result || result.error) {
+                lastError = new Error(result?.message || 'Le téléchargement du runtime Java a échoué.');
+                continue;
+            }
+
+            const executable = resolveExistingJavaExecutable(result.path)
+                || findBundledJavaExecutable(runtimeFolder);
+            if (executable) return { ...result, path: executable };
+
+            lastError = new Error(`Aucun exécutable Java n'a été extrait dans ${runtimeFolder}.`);
+        }
+
+        return {
+            files: [],
+            path: '',
+            error: true,
+            message: `Le runtime Java ${majorVersion} reste incomplet après sa réinstallation. `
+                + `Vérifiez si l'antivirus a placé java.exe en quarantaine. ${lastError?.message || ''}`.trim()
+        };
     };
 
     JavaDownloader.prototype.__fortressPatchedJavaExecutable = true;

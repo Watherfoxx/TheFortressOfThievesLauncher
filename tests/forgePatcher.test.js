@@ -40,6 +40,48 @@ test('réutilise le véritable exécutable du runtime Java déjà extrait', asyn
     assert.equal(path.resolve(result.path), path.resolve(executablePath))
 })
 
+test('supprime et reconstruit automatiquement un runtime Java extrait sans exécutable', async t => {
+    const temporaryPath = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'fortress-corrupt-runtime-'))
+    const runtimeFolder = path.join(temporaryPath, 'runtime', 'jre-21')
+    const staleArchive = path.join(runtimeFolder, 'runtime-corrompu.zip')
+    const executableName = process.platform === 'win32' ? 'java.exe' : 'java'
+    const executablePath = path.join(runtimeFolder, 'runtime-repare', 'bin', executableName)
+    const originalGetJavaOther = JavaDownloader.prototype.__fortressOriginalGetJavaOther
+    let attempts = 0
+
+    await fs.promises.mkdir(runtimeFolder, { recursive: true })
+    await fs.promises.writeFile(staleArchive, 'archive-incomplete')
+
+    t.after(async () => {
+        JavaDownloader.prototype.__fortressOriginalGetJavaOther = originalGetJavaOther
+        await fs.promises.rm(temporaryPath, { recursive: true, force: true })
+    })
+
+    JavaDownloader.prototype.__fortressOriginalGetJavaOther = async function simulatedJavaExtraction() {
+        attempts += 1
+        if (attempts === 1) {
+            assert.equal(fs.existsSync(staleArchive), true)
+            return { files: [], path: path.join(runtimeFolder, 'runtime-corrompu', 'bin', 'java') }
+        }
+
+        assert.equal(fs.existsSync(runtimeFolder), false)
+        await fs.promises.mkdir(path.dirname(executablePath), { recursive: true })
+        await fs.promises.writeFile(executablePath, 'java-runtime')
+        if (process.platform !== 'win32') await fs.promises.chmod(executablePath, 0o755)
+        return { files: [], path: executablePath.replace(/\.exe$/i, '') }
+    }
+
+    const java = new JavaDownloader({
+        path: temporaryPath,
+        java: { version: 21, type: 'jre' }
+    })
+    const result = await java.getJavaOther({ javaVersion: { majorVersion: 21 } }, 21)
+
+    assert.equal(attempts, 2)
+    assert.equal(path.resolve(result.path), path.resolve(executablePath))
+    assert.equal(fs.existsSync(staleArchive), false)
+})
+
 test('Forge complète automatiquement l’extension .exe manquante sous Windows', {
     skip: process.platform !== 'win32'
 }, async t => {
