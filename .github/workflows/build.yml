@@ -38,7 +38,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, ubuntu-latest, windows-latest]
+        # Le build macOS produit les artefacts x64 et ARM64. Le runner Intel est
+        # conservé explicitement pour que electron-builder génère aussi les DMG.
+        os: [macos-15-intel, ubuntu-latest, windows-latest]
 
     steps:
       - name: Check out Git repository
