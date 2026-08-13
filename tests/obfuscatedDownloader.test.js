@@ -3,9 +3,11 @@ const assert = require('node:assert/strict')
 const crypto = require('node:crypto')
 const fs = require('node:fs')
 const Module = require('node:module')
+const { createRequire } = require('node:module')
 const os = require('node:os')
 const path = require('node:path')
 const { Readable } = require('node:stream')
+const vm = require('node:vm')
 const JavaScriptObfuscator = require('javascript-obfuscator')
 const obfuscatorOptions = require('../obfuscator-options.js')
 
@@ -18,6 +20,25 @@ obfuscatedModule.paths = Module._nodeModulePaths(path.dirname(sourcePath))
 obfuscatedModule._compile(obfuscatedSource, sourcePath)
 
 const { Downloader } = require('minecraft-java-core')
+
+test('le downloader obfusqué charge macArchitecture depuis launcher.html', () => {
+    const launcherRequire = createRequire(path.resolve(__dirname, '../src/launcher.html'))
+    const rendererProcess = Object.create(process)
+    rendererProcess.type = 'renderer'
+
+    assert.doesNotThrow(() => vm.runInNewContext(obfuscatedSource, {
+        require: launcherRequire,
+        process: rendererProcess,
+        console,
+        Buffer,
+        URL,
+        AbortController,
+        setTimeout,
+        clearTimeout,
+        setInterval,
+        clearInterval
+    }, { timeout: 5000 }))
+})
 
 test('le downloader reste fonctionnel après la même obfuscation que le build', async t => {
     const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'tfot-obfuscated-download-'))

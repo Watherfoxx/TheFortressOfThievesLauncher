@@ -13,7 +13,10 @@ const { Downloader, Launch } = require('minecraft-java-core');
 const nodeFetch = require('node-fetch');
 const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
-const { isMacJavaExecutableCompatible } = require('../../../macArchitecture.js');
+const macArchitectureModule = process.type === 'renderer'
+    ? './macArchitecture.js'
+    : '../../../macArchitecture.js';
+const { isMacJavaExecutableCompatible } = require(macArchitectureModule);
 let WebReadableStream;
 
 try {

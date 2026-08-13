@@ -28,6 +28,11 @@ img {
     opacity: 1;
 }
 
+/* Reste visible si le JavaScript de démarrage ne peut pas être chargé. */
+.splash-fallback-visible {
+    opacity: 1 !important;
+}
+
 .splash.translate {
     top: 129px;
 }

@@ -6,8 +6,10 @@
 const { ipcRenderer, shell } = require('electron');
 const pkg = require('../package.json');
 const os = require('os');
-const { getMacHardwareArchitecture } = require('../../macArchitecture.js');
-const { getLatestReleaseAsset } = require('../../releaseAsset.js');
+// Les require() d'un script ES chargé par Electron sont résolus depuis
+// index.html (src/ en développement, app/ dans app.asar).
+const { getMacHardwareArchitecture } = require('./macArchitecture.js');
+const { getLatestReleaseAsset } = require('./releaseAsset.js');
 import { config } from './utils.js';
 const nodeFetch = require("node-fetch");
 
@@ -29,6 +31,9 @@ class Splash {
     }
 
     async startAnimation() {
+        this.splash.classList.remove('splash-fallback-visible');
+        this.message.classList.remove('splash-fallback-visible');
+
         let splashes = [
             { "message": "Dressage du perroquet...", "author": "" },
             { "message": "Nettoyage des fonds marins...", "author": "" },
