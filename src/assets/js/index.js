@@ -6,6 +6,8 @@
 const { ipcRenderer, shell } = require('electron');
 const pkg = require('../package.json');
 const os = require('os');
+const { getMacHardwareArchitecture } = require('../../macArchitecture.js');
+const { getLatestReleaseAsset } = require('../../releaseAsset.js');
 import { config } from './utils.js';
 const nodeFetch = require("node-fetch");
 
@@ -99,13 +101,12 @@ class Splash {
         this.maintenanceCheck();
     }
 
-    getLatestReleaseForOS(os, preferredFormat, asset) {
-        return asset.filter(asset => {
-            const name = asset.name.toLowerCase();
-            const isOSMatch = name.includes(os);
-            const isFormatMatch = name.endsWith(preferredFormat);
-            return isOSMatch && isFormatMatch;
-        }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+    getLatestReleaseForOS(os, preferredFormat, asset, architecture = null) {
+        return getLatestReleaseAsset(asset, {
+            os,
+            format: preferredFormat,
+            architecture
+        });
     }
 
     async downloadUpdate() {
@@ -120,7 +121,10 @@ class Splash {
         if (!latestRelease) throw new Error("Aucune release complète n'est disponible");
         let latest;
 
-        if (os.platform() == 'darwin') latest = this.getLatestReleaseForOS('mac', '.dmg', latestRelease);
+        if (os.platform() == 'darwin') {
+            const architecture = getMacHardwareArchitecture();
+            latest = this.getLatestReleaseForOS('mac', '.dmg', latestRelease, architecture);
+        }
         else if (os.platform() == 'linux') latest = this.getLatestReleaseForOS('linux', '.appimage', latestRelease);
         if (!latest) throw new Error("Aucun fichier de mise à jour compatible n'est disponible");
 

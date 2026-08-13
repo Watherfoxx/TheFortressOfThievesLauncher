@@ -801,7 +801,9 @@ class Home {
             version: options.loadder.minecraft_version,
             detached: configClient.launcher_config.closeLauncher == "close-all" ? false : true,
             downloadFileMultiple: configClient.launcher_config.download_multi,
-            intelEnabledMac: configClient.launcher_config.intelEnabledMac,
+            // Sur Apple Silicon, minecraft-java-core choisit ainsi Zulu
+            // aarch64. Un Mac Intel reste automatiquement en x64.
+            intelEnabledMac: false,
 
             loader: {
                 type: options.loadder.loadder_type,

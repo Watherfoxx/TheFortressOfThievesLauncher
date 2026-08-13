@@ -13,6 +13,7 @@ const { Downloader, Launch } = require('minecraft-java-core');
 const nodeFetch = require('node-fetch');
 const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
+const { isMacJavaExecutableCompatible } = require('../../../macArchitecture.js');
 let WebReadableStream;
 
 try {
@@ -634,6 +635,7 @@ const isUsableJavaExecutable = (candidatePath) => {
     try {
         const stat = fs.statSync(candidatePath);
         if (!stat.isFile() || stat.size === 0) return false;
+        if (!isMacJavaExecutableCompatible(candidatePath)) return false;
 
         if (process.platform !== 'win32') {
             try {

@@ -111,7 +111,7 @@ class Launcher {
                     download_multi: 5,
                     theme: 'dark',
                     closeLauncher: 'close-launcher',
-                    intelEnabledMac: true,
+                    intelEnabledMac: false,
                     game_directory: null
                 }
             })
@@ -125,6 +125,12 @@ class Launcher {
         }
         if (!Object.prototype.hasOwnProperty.call(configClient.launcher_config, 'game_directory')) {
             configClient.launcher_config.game_directory = null
+            updated = true
+        }
+        if (configClient.launcher_config.intelEnabledMac !== false) {
+            // Java Intel sous Rosetta était autrefois activé par défaut. Les
+            // builds arm64 doivent utiliser le runtime Zulu natif Apple Silicon.
+            configClient.launcher_config.intelEnabledMac = false
             updated = true
         }
         if (updated) await this.db.updateData('configClient', configClient)
