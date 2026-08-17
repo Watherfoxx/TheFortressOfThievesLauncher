@@ -70,6 +70,28 @@ test('un rollback conserve la source et supprime uniquement la copie', async t =
     assert.equal(fs.existsSync(destinationPath), false)
 })
 
+test('configure un nouvel emplacement lorsque le jeu n’a jamais été téléchargé', async t => {
+    const workspace = await createWorkspace(t)
+    const sourcePath = path.join(workspace, 'source-absente', '.TheFortressOfThieves')
+    const destinationParent = path.join(workspace, 'destination-existante')
+    const destinationPath = path.join(destinationParent, '.TheFortressOfThieves')
+    const manager = new GameDirectoryMigrationManager()
+
+    await fs.promises.mkdir(destinationParent, { recursive: true })
+
+    const migration = await manager.migrate({ sourcePath, destinationPath })
+
+    assert.equal(migration.sourceExisted, false)
+    assert.equal(migration.totalFiles, 0)
+    assert.equal(migration.totalBytes, 0)
+    assert.equal((await fs.promises.stat(destinationPath)).isDirectory(), true)
+
+    const commit = await manager.commit(migration.transactionId)
+    assert.equal(commit.sourceRemoved, true)
+    assert.equal(fs.existsSync(sourcePath), false)
+    assert.equal(fs.existsSync(destinationPath), true)
+})
+
 test('refuse d’écraser un dossier de destination non vide', async t => {
     const workspace = await createWorkspace(t)
     const sourcePath = await createSource(workspace)

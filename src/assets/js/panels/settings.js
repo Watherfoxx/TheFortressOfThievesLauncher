@@ -5,6 +5,7 @@
 
 import { changePanel, accountSelect, database, Slider, config, setStatus, popup, defaultGameDirectoryPath, gameDirectoryPath } from '../utils.js'
 const { ipcRenderer } = require('electron');
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
@@ -331,11 +332,14 @@ class Settings {
 
             let transactionId = null
             let configWasUpdated = false
+            const sourceExistsAtStart = fs.existsSync(currentPath)
             const previousSetting = configClient?.launcher_config?.game_directory ?? null
 
             setMigrationActive(true)
             progressBar.value = 0
-            statusText.textContent = 'Préparation de la migration…'
+            statusText.textContent = sourceExistsAtStart
+                ? 'Préparation de la migration…'
+                : 'Préparation du nouvel emplacement…'
 
             try {
                 const result = await ipcRenderer.invoke('game-directory-migrate', {
@@ -362,15 +366,20 @@ class Settings {
                 }))
 
                 progressBar.value = 100
-                statusText.textContent = 'Migration terminée.'
+                const configurationOnly = result.sourceExisted === false
+                statusText.textContent = configurationOnly
+                    ? 'Nouvel emplacement configuré.'
+                    : 'Migration terminée.'
                 refreshControls()
 
                 const warning = commit.sourceRemoved
                     ? ''
                     : `<br><br>${this.escapeHTML(commit.warning)}`
                 new popup().openPopup({
-                    title: 'Dossier du jeu déplacé',
-                    content: `Le jeu utilise maintenant :<br>${this.escapeHTML(currentPath)}${warning}`,
+                    title: configurationOnly ? 'Emplacement du jeu configuré' : 'Dossier du jeu déplacé',
+                    content: configurationOnly
+                        ? `Le jeu sera téléchargé dans :<br>${this.escapeHTML(currentPath)} lors du premier lancement.`
+                        : `Le jeu utilise maintenant :<br>${this.escapeHTML(currentPath)}${warning}`,
                     color: 'var(--color)',
                     options: true
                 })
@@ -387,7 +396,9 @@ class Settings {
                         )
                     }
                 }
-                statusText.textContent = 'La migration a échoué. L’ancien dossier a été conservé.'
+                statusText.textContent = sourceExistsAtStart
+                    ? 'La migration a échoué. L’ancien dossier a été conservé.'
+                    : 'La configuration du nouvel emplacement a échoué.'
                 showError(error)
             } finally {
                 setMigrationActive(false)
@@ -406,14 +417,17 @@ class Settings {
             const externalNotice = storage?.type === 'ssd' && storage.external === true
                 ? '<br>Un SSD interne reste recommandé pour obtenir les meilleures performances.'
                 : ''
+            const sourceExists = fs.existsSync(currentPath)
 
             new popup().openPopup({
-                title: 'Déplacer le dossier du jeu',
-                content: `Tout le contenu sera déplacé vers :<br>${this.escapeHTML(destinationPath)}${storageNotice}${externalNotice}<br><br>N’éteignez pas le launcher pendant l’opération.`,
+                title: sourceExists ? 'Déplacer le dossier du jeu' : 'Choisir le dossier d’installation',
+                content: sourceExists
+                    ? `Tout le contenu sera déplacé vers :<br>${this.escapeHTML(destinationPath)}${storageNotice}${externalNotice}<br><br>N’éteignez pas le launcher pendant l’opération.`
+                    : `Le jeu n’est pas encore installé. Il sera téléchargé dans :<br>${this.escapeHTML(destinationPath)}${storageNotice}${externalNotice}`,
                 color: 'var(--color)',
                 buttons: [
                     {
-                        text: 'Déplacer',
+                        text: sourceExists ? 'Déplacer' : 'Utiliser cet emplacement',
                         action: async () => await runMigration(destinationPath, useDefaultPath)
                     },
                     { text: 'Annuler' }

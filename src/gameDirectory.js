@@ -32,6 +32,21 @@ async function pathExists(targetPath) {
     }
 }
 
+async function ensureDirectoryExists(directoryPath) {
+    try {
+        const stats = await fs.promises.stat(directoryPath)
+        if (!stats.isDirectory()) {
+            throw new GameDirectoryError(
+                'PARENT_NOT_DIRECTORY',
+                'Le dossier parent de l’emplacement choisi n’est pas un dossier.'
+            )
+        }
+    } catch (error) {
+        if (error.code !== 'ENOENT') throw error
+        await fs.promises.mkdir(directoryPath, { recursive: true })
+    }
+}
+
 async function buildManifest(rootPath) {
     if (!await pathExists(rootPath)) return []
 
@@ -262,9 +277,12 @@ class GameDirectoryMigrationManager {
         let destinationCreated = false
 
         try {
-            await fs.promises.mkdir(destinationParent, { recursive: true })
+            // Sous Windows, tenter de recréer une racine existante (par exemple D:\)
+            // peut échouer avec EPERM. Ne créons le parent que s’il manque réellement.
+            await ensureDirectoryExists(destinationParent)
             await ensureDestinationIsAvailable(paths.destinationPath)
 
+            const sourceExisted = await pathExists(paths.sourcePath)
             const manifest = await buildManifest(paths.sourcePath)
             const totalBytes = manifest
                 .filter(entry => entry.type === 'file')
@@ -279,10 +297,11 @@ class GameDirectoryMigrationManager {
                 ...paths,
                 destinationCreated,
                 summary,
-                manifest
+                manifest,
+                sourceExisted
             })
 
-            return { transactionId, ...paths, ...summary }
+            return { transactionId, ...paths, ...summary, sourceExisted }
         } catch (error) {
             if (await pathExists(stagingPath)) {
                 await fs.promises.rm(stagingPath, { recursive: true, force: true }).catch(() => {})
