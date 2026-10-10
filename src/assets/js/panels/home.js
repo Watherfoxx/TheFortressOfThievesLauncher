@@ -567,6 +567,26 @@ class Home {
 
     async news() {
         let newsElement = document.querySelector('.news-list');
+        const openNewsLink = event => {
+            if (event.type === 'auxclick' && event.button !== 1) return
+            const link = event.target.closest?.('a[href]')
+            if (!link || !newsElement.contains(link)) return
+
+            event.preventDefault()
+            const href = link.getAttribute('href')?.trim()
+            if (!href || href.startsWith('#')) return
+
+            try {
+                // RSS links can be relative to the website, not launcher.html.
+                const url = new URL(href, 'https://thefortressofthieves.fr/')
+                if (!['https:', 'http:'].includes(url.protocol)) return
+                shell.openExternal(url.href).catch(error => console.error('[News] Impossible d’ouvrir le lien :', error))
+            } catch (error) {
+                console.error('[News] Lien invalide :', error)
+            }
+        }
+        newsElement.addEventListener('click', openNewsLink)
+        newsElement.addEventListener('auxclick', openNewsLink)
         let news = await config.getNews().then(res => res).catch(err => false);
         if (news) {
             if (!news.length) {
