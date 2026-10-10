@@ -83,21 +83,21 @@ class Login {
         connectOffline.onclick = async () => {
             if (this.isOfflineSubmitting) return
 
-            const pseudo = emailOffline.value.trim()
+            const pseudo = emailOffline.value
 
-            if (pseudo.length < 3) {
+            if (pseudo.length < 3 || pseudo.length > 16) {
                 popupLogin.openPopup({
                     title: 'Erreur',
-                    content: 'Votre pseudo doit faire au moins 3 caractères.',
+                    content: 'Votre pseudo doit contenir entre 3 et 16 caractères.',
                     options: true
                 });
                 return;
             }
 
-            if (pseudo.match(/ /g)) {
+            if (/[^a-zA-Z0-9_]/.test(pseudo)) {
                 popupLogin.openPopup({
                     title: 'Erreur',
-                    content: 'Votre pseudo ne doit pas contenir d\'espaces.',
+                    content: 'Votre pseudo peut uniquement contenir des lettres de A à Z, des chiffres et le tiret bas (_). Les espaces, accents et autres caractères spéciaux ne sont pas autorisés.',
                     options: true
                 });
                 return;

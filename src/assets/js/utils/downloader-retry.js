@@ -381,7 +381,7 @@ const patchDownloader = () => {
             previousDownloaded = downloaded;
         };
 
-        const throughputInterval = setInterval(updateThroughput, 500);
+        const throughputInterval = setInterval(updateThroughput, 1000);
 
         const abortAllActive = () => {
             for (const controller of activeControllers) {

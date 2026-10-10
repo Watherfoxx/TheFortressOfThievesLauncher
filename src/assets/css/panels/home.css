@@ -222,11 +222,18 @@
     text-align: left;
 }
 
+.download-progress-line {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin: 0.5rem 0;
+}
+
 .progress-bar {
     appearance: none;
     height: 10px;
-    margin: 0.5rem 0;
     width: 18rem;
+    flex: 0 0 18rem;
 }
 
 .progress-bar::-webkit-progress-bar {
@@ -237,6 +244,14 @@
 .progress-bar::-webkit-progress-value {
     background-color: #ff7300;
     border-radius: 10px;
+}
+
+.download-eta {
+    min-width: 8.5rem;
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
 }
 
 .home-bottom {

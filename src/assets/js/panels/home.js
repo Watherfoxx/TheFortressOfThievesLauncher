@@ -10,6 +10,7 @@ const { shell, ipcRenderer, systemPreferences } = require('electron')
 const { execFile } = require('child_process')
 const fs = require('fs')
 const path = require('path')
+const os = require('os')
 const zlib = require('zlib')
 const fetch = require('node-fetch')
 const FormData = require('form-data')
@@ -194,7 +195,39 @@ class Home {
         ]
     }
 
-    createCrashReportSnapshot(instancePaths) {
+    getNativeCrashReportPaths(instancePaths, baseDataPath) {
+        return [...new Set([
+            ...instancePaths,
+            baseDataPath,
+            process.cwd(),
+            path.dirname(process.execPath),
+            os.tmpdir()
+        ].filter(Boolean).map(directoryPath => path.resolve(directoryPath)))]
+    }
+
+    listNativeCrashReports(directoryPaths) {
+        return directoryPaths.flatMap(directoryPath => {
+            try {
+                return fs.readdirSync(directoryPath)
+                    .filter(fileName => /^hs_err_pid\d+\.log$/i.test(fileName))
+                    .flatMap(fileName => {
+                        try {
+                            const filePath = path.join(directoryPath, fileName)
+                            const stats = fs.statSync(filePath)
+                            if (!stats.isFile()) return []
+                            return [{ filePath, key: path.resolve(filePath).toLowerCase(), mtimeMs: stats.mtimeMs }]
+                        } catch {
+                            return []
+                        }
+                    })
+            } catch {
+                // A protected or absent fallback directory must not block launch.
+                return []
+            }
+        })
+    }
+
+    createCrashReportSnapshot(instancePaths, baseDataPath) {
         const snapshot = new Map()
         const files = instancePaths.flatMap(instancePath => [
             ...(this.listFiles(path.join(instancePath, 'crash-reports')) || []),
@@ -207,6 +240,7 @@ class Home {
             })
         ])
 
+        files.push(...this.listNativeCrashReports(this.getNativeCrashReportPaths(instancePaths, baseDataPath)))
         for (const file of files) snapshot.set(file.key, file.mtimeMs)
 
         return snapshot
@@ -272,6 +306,26 @@ class Home {
         }
     }
 
+    readNativeCrashReport(filePath) {
+        // The fatal error and problematic frame are at the beginning of hs_err logs.
+        const stats = fs.statSync(filePath)
+        const maxBytes = MAX_LOG_CHARS
+        const buffer = Buffer.alloc(Math.min(stats.size, maxBytes))
+        const fd = fs.openSync(filePath, 'r')
+        try {
+            if (stats.size <= maxBytes) {
+                fs.readSync(fd, buffer, 0, buffer.length, 0)
+                return buffer.toString('utf8')
+            }
+            const half = Math.floor(maxBytes / 2)
+            fs.readSync(fd, buffer, 0, half, 0)
+            fs.readSync(fd, buffer, half, maxBytes - half, stats.size - (maxBytes - half))
+            return `${buffer.subarray(0, half).toString('utf8')}\n[Rapport Java tronqué : début et fin conservés]\n${buffer.subarray(half).toString('utf8')}`
+        } finally {
+            fs.closeSync(fd)
+        }
+    }
+
     buildCrashReport({ exitCode, baseDataPath, instanceName, instanceFolderName, authenticator, options, crashReportSnapshot }) {
         const instancePaths = this.getInstanceReportPaths(baseDataPath, instanceFolderName)
         const newestCrashReport = this.getNewestChangedFileInPaths(
@@ -279,7 +333,12 @@ class Home {
             '.txt',
             crashReportSnapshot
         )
+        const nativeReportPaths = this.getNativeCrashReportPaths(instancePaths, baseDataPath)
+        const newestNativeCrashReport = this.listNativeCrashReports(nativeReportPaths)
+            .filter(file => this.hasFileChangedSinceSnapshot(file, crashReportSnapshot))
+            .sort((a, b) => b.mtimeMs - a.mtimeMs)[0]?.filePath || null
         const reportFiles = [
+            { label: 'Crash natif Java', filePath: newestNativeCrashReport, native: true },
             { label: 'Crash report', filePath: newestCrashReport },
             { label: 'Latest log', filePath: this.getChangedFileInPaths(instancePaths, path.join('logs', 'latest.log'), crashReportSnapshot) },
             { label: 'Debug log', filePath: this.getChangedFileInPaths(instancePaths, path.join('logs', 'debug.log'), crashReportSnapshot) }
@@ -298,12 +357,15 @@ class Home {
             `Minecraft: ${options?.loadder?.minecraft_version || 'inconnu'}`,
             `Loader: ${options?.loadder?.loadder_type || 'none'} ${options?.loadder?.loadder_version || ''}`.trim(),
             `Dossiers surveillés: ${instancePaths.join(' | ')}`,
+            `Dossiers de crash Java surveillés: ${nativeReportPaths.join(' | ')}`,
             ''
         ]
 
         for (const reportFile of reportFiles) {
             sections.push(`===== ${reportFile.label}: ${reportFile.filePath} =====`)
-            sections.push(this.readTextFileTail(reportFile.filePath) || 'Fichier illisible.')
+            sections.push((reportFile.native
+                ? this.readNativeCrashReport(reportFile.filePath)
+                : this.readTextFileTail(reportFile.filePath)) || 'Fichier illisible.')
             sections.push('')
         }
 
@@ -312,7 +374,7 @@ class Home {
         return {
             content: sections.join('\n').slice(0, MAX_CRASH_REPORT_CHARS),
             hasReportFiles: reportFiles.length > 0,
-            hasCrashReport: Boolean(newestCrashReport)
+            hasCrashReport: Boolean(newestCrashReport || newestNativeCrashReport)
         }
     }
 
@@ -786,7 +848,34 @@ class Home {
         let infoStartingBOX = document.querySelector('.info-starting-game')
         let infoStarting = document.querySelector(".info-starting-game-text")
         let progressBar = document.querySelector('.progress-bar')
+        let downloadEta = document.querySelector('.download-eta')
         let instanceSelector = document.querySelector('.instance-select')
+        let downloadPhaseActive = false
+
+        const hideDownloadEta = () => {
+            downloadPhaseActive = false
+            downloadEta.hidden = true
+            downloadEta.textContent = ''
+        }
+
+        const showPendingDownloadEta = () => {
+            downloadPhaseActive = true
+            downloadEta.textContent = 'Calcul…'
+            downloadEta.hidden = false
+        }
+
+        const formatRemainingTime = estimatedSeconds => {
+            if (!Number.isFinite(estimatedSeconds) || estimatedSeconds < 0) return null
+
+            const totalSeconds = Math.max(0, Math.ceil(estimatedSeconds))
+            const hours = Math.floor(totalSeconds / 3600)
+            const minutes = Math.floor((totalSeconds % 3600) / 60)
+            const seconds = totalSeconds % 60
+
+            if (hours > 0) return `≈ ${hours} h ${minutes} min restantes`
+            if (minutes > 0) return `≈ ${minutes} min ${seconds} s restantes`
+            return `≈ ${seconds} s restantes`
+        }
 
         const baseDataPath = await gameDirectoryPath(this.config.dataDirectory, configClient)
         const hiddenEntries = this.getHiddenEntries(options)
@@ -834,6 +923,7 @@ class Home {
             },
 
             JVM_ARGS: [
+                `-XX:ErrorFile=${path.join(baseDataPath, 'instances', instanceFolderName, 'hs_err_pid%p.log')}`,
                 //'-Dio.netty.maxDirectMemory=0', Retiré pour l'ajoute de ZGC
                 //'-XX:+UseG1GC', Retiré pour l'ajoute de ZGC
                 //'-XX:+ParallelRefProcEnabled', Retiré pour l'ajoute de ZGC
@@ -852,7 +942,7 @@ class Home {
                 '-XX:+ZGenerational' // Ajouté pour la v3 de Distant Horizon
             ]
         }
-        const crashReportSnapshot = this.createCrashReportSnapshot(this.getInstanceReportPaths(baseDataPath, instanceFolderName))
+        const crashReportSnapshot = this.createCrashReportSnapshot(this.getInstanceReportPaths(baseDataPath, instanceFolderName), baseDataPath)
         const instancePath = path.join(baseDataPath, 'instances', instanceFolderName)
         const gameLogCapture = this.createGameLogCapture(instancePath)
         let launchOutput = ''
@@ -862,14 +952,17 @@ class Home {
         if (instanceSelector) instanceSelector.style.display = 'none'
         infoStartingBOX.style.display = "block"
         progressBar.style.display = "";
+        hideDownloadEta()
         ipcRenderer.send('main-window-progress-load')
 
         launch.on('extract', extract => {
+            hideDownloadEta()
             ipcRenderer.send('main-window-progress-load')
             console.log(extract);
         });
 
         launch.on('progress', (progress, size) => {
+            if (!downloadPhaseActive) showPendingDownloadEta()
             infoStarting.innerHTML = `Téléchargement ${((progress / size) * 100).toFixed(0)}%`
             ipcRenderer.send('main-window-progress', { progress, size })
             progressBar.value = progress;
@@ -877,6 +970,7 @@ class Home {
         });
 
         launch.on('check', (progress, size) => {
+            hideDownloadEta()
             infoStarting.innerHTML = `Vérification ${((progress / size) * 100).toFixed(0)}%`
             ipcRenderer.send('main-window-progress', { progress, size })
             progressBar.value = progress;
@@ -884,10 +978,11 @@ class Home {
         });
 
         launch.on('estimated', (time) => {
-            let hours = Math.floor(time / 3600);
-            let minutes = Math.floor((time - hours * 3600) / 60);
-            let seconds = Math.floor(time - hours * 3600 - minutes * 60);
-            console.log(`${hours}h ${minutes}m ${seconds}s`);
+            if (!downloadPhaseActive) return
+            const remainingTime = formatRemainingTime(time)
+            if (!remainingTime) return
+            downloadEta.textContent = remainingTime
+            downloadEta.hidden = false
         })
 
         launch.on('speed', (speed) => {
@@ -895,6 +990,7 @@ class Home {
         })
 
         launch.on('patch', patch => {
+            hideDownloadEta()
             console.log(patch);
             ipcRenderer.send('main-window-progress-load')
             infoStarting.innerHTML = `Finition de la proue`
@@ -915,6 +1011,7 @@ class Home {
             }
 
             progressBar.style.display = "none"
+            hideDownloadEta()
             if (configClient.launcher_config.closeLauncher == 'close-launcher') {
                 ipcRenderer.send("main-window-hide")
             };
@@ -936,6 +1033,7 @@ class Home {
             };
             ipcRenderer.send('main-window-progress-reset')
             infoStartingBOX.style.display = "none"
+            hideDownloadEta()
             playInstanceBTN.style.display = "flex"
             if (instanceSelector) instanceSelector.style.display = 'flex'
             infoStarting.innerHTML = `Vérification`
@@ -1039,6 +1137,7 @@ class Home {
             };
             ipcRenderer.send('main-window-progress-reset')
             infoStartingBOX.style.display = "none"
+            hideDownloadEta()
             playInstanceBTN.style.display = "flex"
             if (instanceSelector) instanceSelector.style.display = 'flex'
             infoStarting.innerHTML = `Vérification`
