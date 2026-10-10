@@ -41,7 +41,8 @@ function createWindow() {
     });
     Menu.setApplicationMenu(null);
     mainWindow.setMenuBarVisibility(false);
-    const launcherPath = path.join(app.getAppPath(), 'src', 'launcher.html');
+    // Resolve from this module: its root is src in dev and app in packaged builds.
+    const launcherPath = path.resolve(__dirname, '../../..', 'launcher.html');
     const launcherURL = pathToFileURL(launcherPath).href;
     const openWebsite = targetURL => {
         try {

@@ -5,6 +5,8 @@ const path = require('node:path')
 const vm = require('node:vm')
 const { EventEmitter } = require('node:events')
 const { pathToFileURL } = require('node:url')
+const JavaScriptObfuscator = require('javascript-obfuscator')
+const obfuscatorOptions = require('../obfuscator-options.js')
 
 test('les liens des news ouvrent le navigateur, y compris les liens relatifs et les clics sur un enfant', async () => {
     const opened = []
@@ -48,7 +50,8 @@ test('les liens des news ouvrent le navigateur, y compris les liens relatifs et 
     assert.deepEqual(opened, ['https://example.com/news', 'https://thefortressofthieves.fr/actualites'])
 })
 
-test('la fenêtre principale bloque la navigation externe et les nouvelles fenêtres', () => {
+for (const packaged of [false, true]) {
+test(`la fenêtre principale charge le bon HTML et bloque la navigation externe (${packaged ? 'build obfusqué' : 'dev'})`, () => {
     const opened = []
     let window
     class FakeWindow extends EventEmitter {
@@ -61,7 +64,10 @@ test('la fenêtre principale bloque la navigation externe et les nouvelles fenê
         setMenuBarVisibility() {}
         loadFile(filePath) { this.loadedPath = filePath }
     }
+    const appRoot = path.resolve(__dirname, '..')
+    const contentFolder = packaged ? 'app' : 'src'
     const context = vm.createContext({
+        __dirname: path.join(appRoot, contentFolder, 'assets', 'js', 'windows'),
         require: name => {
             if (name === 'electron') return {
                 app: { getAppPath: () => path.resolve(__dirname, '..'), quit() {} },
@@ -74,8 +80,13 @@ test('la fenêtre principale bloque la navigation externe et les nouvelles fenê
         },
         process, URL, console, module: { exports: {} }
     })
-    vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/assets/js/windows/mainWindow.js'), 'utf8'), context)
+    let source = fs.readFileSync(path.join(__dirname, '../src/assets/js/windows/mainWindow.js'), 'utf8')
+    if (packaged) {
+        source = JavaScriptObfuscator.obfuscate(source.replace(/src\//g, 'app/'), obfuscatorOptions).getObfuscatedCode()
+    }
+    vm.runInContext(source, context)
     context.module.exports.createWindow()
+    assert.equal(window.loadedPath, path.join(appRoot, contentFolder, 'launcher.html'))
     function navigate(url) {
         let prevented = false
         window.webContents.emit('will-navigate', { preventDefault: () => { prevented = true } }, url)
@@ -88,3 +99,4 @@ test('la fenêtre principale bloque la navigation externe et les nouvelles fenê
     assert.equal(window.openHandler({ url: 'javascript:alert(1)' }).action, 'deny')
     assert.deepEqual(opened, ['https://example.com/news', 'https://example.com/new-tab'])
 })
+}
