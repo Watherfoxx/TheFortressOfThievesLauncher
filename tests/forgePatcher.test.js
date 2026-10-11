@@ -3,6 +3,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const test = require('node:test')
+const forgeJar = require('./helpers/forge-jar.cjs')
 
 require('../src/assets/js/utils/downloader-retry.js')
 
@@ -150,8 +151,13 @@ test('Forge retrouve Java dans un runtime Windows profondément imbriqué', {
     assert.deepEqual(result, { success: true })
 })
 
-test('un processus Forge non nul remonte une erreur sans exception EventEmitter', async () => {
-    const patcher = new ForgePatcher({ path: process.cwd() })
+test('un processus Forge non nul remonte une erreur sans exception EventEmitter', async t => {
+    const temporaryPath = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'fortress-forge-process-'))
+    t.after(() => fs.promises.rm(temporaryPath, { recursive: true, force: true }))
+    const jarPath = path.join(temporaryPath, 'libraries/example/invalid-processor/1.0.0/invalid-processor-1.0.0.jar')
+    await fs.promises.mkdir(path.dirname(jarPath), { recursive: true })
+    await fs.promises.writeFile(jarPath, forgeJar())
+    const patcher = new ForgePatcher({ path: temporaryPath })
     const errors = []
 
     patcher.on('error', error => errors.push(error))

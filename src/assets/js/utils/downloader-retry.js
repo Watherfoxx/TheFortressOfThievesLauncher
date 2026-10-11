@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { inflateRawSync } = require('zlib');
 const { spawn } = require('child_process');
 const { Downloader, Launch } = require('minecraft-java-core');
 const nodeFetch = require('node-fetch');
@@ -271,6 +272,10 @@ const patchDownloader = () => {
                 throw new Error(`Écriture disque incomplète : ${diskSize} octets écrits sur ${receivedSize}.`);
             }
 
+            // Legacy Forge profiles sometimes supply no digest. Validate their
+            // archives before promotion, so invalid HTTP bodies are retried too.
+            if (typeof file.validate === 'function') await file.validate(temporaryPath);
+
             removeFile(file.path);
             fs.renameSync(temporaryPath, file.path);
 
@@ -468,10 +473,50 @@ const patchLaunchErrorHandling = () => {
     if (Launch.prototype.__fortressPatchedTerminalErrors) return;
 
     const originalStart = Launch.prototype.start;
+    const coreDirectory = path.dirname(require.resolve('minecraft-java-core'));
+    const MinecraftArguments = require(path.join(coreDirectory, 'Minecraft', 'Minecraft-Arguments.js')).default;
+    const MinecraftLoader = require(path.join(coreDirectory, 'Minecraft', 'Minecraft-Loader.js')).default;
 
-    Launch.prototype.start = async function patchedLaunchStart(...args) {
+    Launch.prototype.start = async function patchedLaunchStart() {
         try {
-            return await originalStart.apply(this, args);
+            const data = await this.DownloadGame();
+            if (!data || data.error) {
+                if (data?.error) this.emit('error', data);
+                return null;
+            }
+            const { minecraftJson, minecraftLoader, minecraftVersion, minecraftJava } = data;
+            const minecraftArguments = await new MinecraftArguments(this.options).GetArguments(minecraftJson, minecraftLoader);
+            if ('error' in minecraftArguments) return this.emit('error', minecraftArguments);
+            const loaderArguments = await new MinecraftLoader(this.options).GetArguments(minecraftLoader, minecraftVersion);
+            if ('error' in loaderArguments) return this.emit('error', loaderArguments);
+            const args = [...minecraftArguments.jvm, ...minecraftArguments.classpath, ...loaderArguments.jvm,
+                minecraftArguments.mainClass, ...minecraftArguments.game, ...loaderArguments.game];
+            const java = this.options.java.path || minecraftJava.path;
+            const directory = this.options.instance
+                ? path.join(this.options.path, 'instances', this.options.instance) : this.options.path;
+            fs.mkdirSync(directory, { recursive: true });
+            let safeArguments = args.join(' ');
+            for (const secret of [this.options.authenticator?.access_token, this.options.authenticator?.client_token,
+                this.options.authenticator?.uuid, this.options.authenticator?.xboxAccount?.xuid]) {
+                if (secret) safeArguments = safeArguments.replaceAll(secret, '????????');
+            }
+            safeArguments = safeArguments.replaceAll(`${this.options.path}/`, '');
+            const child = spawn(java, args, { cwd: directory, detached: this.options.detached, windowsHide: true });
+            // The core replaces the exit code with "Minecraft closed". Preserve
+            // the real status and PID, so normal exits and other JVMs aren't crashes.
+            this.emit('game-process', { pid: child.pid });
+            this.emit('data', `Launching with arguments ${safeArguments}`);
+            child.stdout.on('data', data => this.emit('data', data.toString('utf-8')));
+            child.stderr.on('data', data => this.emit('data', data.toString('utf-8')));
+            let spawnFailed = false;
+            child.once('error', error => {
+                spawnFailed = true;
+                this.emit('error', formatError(error));
+            });
+            child.once('close', (code, signal) => {
+                if (!spawnFailed) this.emit('close', code, signal);
+            });
+            return child;
         } catch (error) {
             // The downloader forwards its fatal error to Launch before rejecting.
             // Swallow that already-reported rejection so the original launch chain
@@ -813,6 +858,170 @@ const patchJavaRuntimeExecutable = () => {
     JavaDownloader.prototype.__fortressOriginalGetJavaOther = originalGetJavaOther;
 };
 
+const zipCrcTable = Array.from({ length: 256 }, (_, value) => {
+    for (let bit = 0; bit < 8; bit += 1) {
+        value = (value >>> 1) ^ ((value & 1) ? 0xedb88320 : 0);
+    }
+    return value >>> 0;
+});
+
+// Check the directory, decompressed lengths and CRCs, not merely the PK header.
+// Used only for old profiles without an authoritative SHA-1.
+const validateForgeJar = async filePath => {
+    const buffer = await fs.promises.readFile(filePath);
+    const invalid = () => { throw new Error(`Archive JAR incomplète ou corrompue : ${filePath}`); };
+    let end = -1;
+    for (let offset = buffer.length - 22; offset >= Math.max(0, buffer.length - 65557); offset -= 1) {
+        if (buffer.readUInt32LE(offset) === 0x06054b50
+            && offset + 22 + buffer.readUInt16LE(offset + 20) === buffer.length) {
+            end = offset;
+            break;
+        }
+    }
+    if (end < 0) invalid();
+    const count = buffer.readUInt16LE(end + 10);
+    const directorySize = buffer.readUInt32LE(end + 12);
+    let cursor = buffer.readUInt32LE(end + 16);
+    if (!count || buffer.readUInt32LE(end + 4) !== 0
+        || buffer.readUInt16LE(end + 8) !== count || cursor + directorySize !== end) invalid();
+
+    for (let entry = 0; entry < count; entry += 1) {
+        if (cursor + 46 > end || buffer.readUInt32LE(cursor) !== 0x02014b50) invalid();
+        const method = buffer.readUInt16LE(cursor + 10);
+        const compressedSize = buffer.readUInt32LE(cursor + 20);
+        const uncompressedSize = buffer.readUInt32LE(cursor + 24);
+        const header = buffer.readUInt32LE(cursor + 42);
+        const next = cursor + 46 + buffer.readUInt16LE(cursor + 28)
+            + buffer.readUInt16LE(cursor + 30) + buffer.readUInt16LE(cursor + 32);
+        if (next > end || header + 30 > buffer.length
+            || buffer.readUInt32LE(header) !== 0x04034b50) invalid();
+        const start = header + 30 + buffer.readUInt16LE(header + 26) + buffer.readUInt16LE(header + 28);
+        if (start + compressedSize > buffer.readUInt32LE(end + 16)) invalid();
+        const compressed = buffer.subarray(start, start + compressedSize);
+        if (method !== 0 && method !== 8) invalid();
+        const data = method === 8
+            ? inflateRawSync(compressed, { maxOutputLength: uncompressedSize + 1 })
+            : compressed;
+        if (data.length !== uncompressedSize) invalid();
+        let crc = 0xffffffff;
+        for (const byte of data) crc = (crc >>> 8) ^ zipCrcTable[(crc ^ byte) & 0xff];
+        if (((crc ^ 0xffffffff) >>> 0) !== buffer.readUInt32LE(cursor + 16)) invalid();
+        cursor = next;
+    }
+    if (cursor !== end) invalid();
+};
+
+const getForgeLibraryFile = (basePath, coordinate, artifact = {}, suffix = '') => {
+    const coreDirectory = path.dirname(require.resolve('minecraft-java-core'));
+    const { getPathLibraries } = require(path.join(coreDirectory, 'utils', 'Index.js'));
+    const info = getPathLibraries(coordinate, suffix);
+    const root = path.resolve(basePath, 'libraries');
+    const filePath = path.resolve(root, info.path, info.name);
+    const relative = path.relative(root, filePath);
+    if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        throw new Error(`Chemin de bibliothèque Forge invalide : ${coordinate}`);
+    }
+    return {
+        path: filePath,
+        folder: path.dirname(filePath),
+        name: info.name,
+        repositoryPath: `${info.path}/${info.name}`,
+        url: artifact.url,
+        size: Number(artifact.size) || 0,
+        sha1: artifact.sha1,
+        type: 'libraries',
+        validate: artifact.sha1 || !info.name.endsWith('.jar') ? undefined : validateForgeJar
+    };
+};
+
+const isForgeLibraryValid = async file => {
+    try {
+        const stat = await fs.promises.stat(file.path);
+        if (!stat.isFile() || !stat.size || (file.size > 0 && stat.size !== file.size)) return false;
+        if (file.sha1) {
+            const coreDirectory = path.dirname(require.resolve('minecraft-java-core'));
+            const { getFileHash } = require(path.join(coreDirectory, 'utils', 'Index.js'));
+            return (await getFileHash(file.path)).toLowerCase() === file.sha1.toLowerCase();
+        }
+        if (file.validate) {
+            try { await file.validate(file.path); } catch (error) { return false; }
+        }
+        return true;
+    } catch (error) {
+        if (error.code === 'ENOENT') return false;
+        throw error;
+    }
+};
+
+const patchForgeLibraryIntegrity = () => {
+    const coreDirectory = path.dirname(require.resolve('minecraft-java-core'));
+    const Forge = require(path.join(coreDirectory, 'Minecraft-Loader', 'loader', 'forge', 'forge.js')).default;
+    const NeoForge = require(path.join(coreDirectory, 'Minecraft-Loader', 'loader', 'neoForge', 'neoForge.js')).default;
+    const { skipLibrary, mirrors } = require(path.join(coreDirectory, 'utils', 'Index.js'));
+
+    for (const LoaderClass of [Forge, NeoForge]) {
+        if (LoaderClass.prototype.__fortressPatchedLibraryIntegrity) continue;
+        LoaderClass.prototype.downloadLibraries = async function verifiedForgeLibraries(profile, skipCoreFilter) {
+            // Installer metadata can carry the hash omitted from version.json.
+            const byName = new Map();
+            for (const lib of [...(profile.version?.libraries || []), ...(profile.install?.libraries || [])]) {
+                const previous = byName.get(lib.name);
+                if (!previous || lib.downloads?.artifact?.sha1 || !previous.downloads?.artifact?.sha1) {
+                    byName.set(lib.name, lib);
+                }
+            }
+            const libraries = [...byName.values()];
+            const pending = [];
+            const downloader = new Downloader();
+            let checked = 0;
+            const corePrefixes = ['net.minecraftforge:forge:', 'net.minecraftforge:minecraftforge:',
+                'net.minecraftforge:neoforged:', 'net.neoforged:forge:', 'net.neoforged:neoforge:'];
+
+            for (const lib of libraries) {
+                const skipEmbedded = skipCoreFilter && corePrefixes.some(prefix => lib.name.startsWith(prefix))
+                    && !lib.downloads?.artifact?.url;
+                if (!skipEmbedded && !skipLibrary(lib)) {
+                    const osName = { win32: 'windows', linux: 'linux', darwin: 'osx' }[process.platform];
+                    const classifier = lib.natives?.[osName]?.replace('${arch}', process.arch === 'ia32' ? '32' : '64');
+                    const artifact = (classifier ? lib.downloads?.classifiers?.[classifier] : lib.downloads?.artifact) || {};
+                    const file = getForgeLibraryFile(this.options.path, lib.name, artifact, classifier ? `-${classifier}` : '');
+                    if (!await isForgeLibraryValid(file)) {
+                        if (!file.url && lib.url) file.url = `${lib.url.replace(/\/?$/, '/')}${file.repositoryPath}`;
+                        if (!file.url) {
+                            const mirror = await downloader.checkMirror(file.repositoryPath, mirrors);
+                            if (mirror?.status === 200) {
+                                file.url = mirror.url;
+                                if (!file.size) file.size = Number(mirror.size) || 0;
+                            }
+                        }
+                        if (!file.url) {
+                            throw new Error(`Impossible de réparer la bibliothèque Forge ${file.name} : aucune source de téléchargement disponible.`);
+                        }
+                        pending.push(file);
+                    }
+                }
+                this.emit('check', ++checked, libraries.length, 'libraries');
+            }
+            if (pending.length) {
+                downloader.on('progress', (current, total) => this.emit('progress', current, total, 'libraries'));
+                downloader.on('speed', speed => this.emit('speed', speed));
+                downloader.on('estimated', seconds => this.emit('estimated', seconds));
+                // Do not forward error here: rejection reaches Loader.install(),
+                // which reports it once and stops before patchForge / game launch.
+                await downloader.downloadFileMultiple(pending, pending.reduce((sum, file) => sum + file.size, 0),
+                    this.options.downloadFileMultiple, this.options.timeout || 10000);
+                for (const file of pending) {
+                    if (!await isForgeLibraryValid(file)) {
+                        throw new Error(`La bibliothèque Forge ${file.name} reste invalide après réparation.`);
+                    }
+                }
+            }
+            return libraries;
+        };
+        LoaderClass.prototype.__fortressPatchedLibraryIntegrity = true;
+    }
+};
+
 const patchForgePatcherExecution = () => {
     const coreEntry = require.resolve('minecraft-java-core');
     const coreDirectory = path.dirname(coreEntry);
@@ -866,6 +1075,17 @@ const patchForgePatcherExecution = () => {
                 const classPathInfo = getPathLibraries(classPath);
                 return path.join(this.options.path, 'libraries', classPathInfo.path, classPathInfo.name);
             });
+            // Java silently ignores missing classpath JARs. Catch them before
+            // spawning it, including libraries omitted from the installer list.
+            for (const coordinate of [processor.jar, ...(processor.classpath || [])]) {
+                const metadata = profile.libraries?.find(lib => lib.name === coordinate)?.downloads?.artifact;
+                const file = getForgeLibraryFile(this.options.path, coordinate, metadata);
+                if (!await isForgeLibraryValid(file)) {
+                    const message = `Bibliothèque requise par le patcher Forge manquante ou corrompue : ${file.name}. Relancez la vérification pour la réparer.`;
+                    this.emit('error', message);
+                    return { error: message };
+                }
+            }
             const mainClass = await this.readJarManifest(jarPath);
 
             if (!mainClass) {
@@ -1031,6 +1251,7 @@ patchBundleIgnoreVerification();
 patchMinecraftLibraryArtifacts();
 patchConfiguredJavaFallback();
 patchJavaRuntimeExecutable();
+patchForgeLibraryIntegrity();
 patchForgePatcherExecution();
 patchModLoaderErrorHandling();
 patchLoaderErrorPropagation();

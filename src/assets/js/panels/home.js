@@ -15,7 +15,7 @@ const zlib = require('zlib')
 const fetch = require('node-fetch')
 const FormData = require('form-data')
 
-const DISCORD_CRASH_WEBHOOK_URL = process.env.DISCORD_CRASH_WEBHOOK_URL || '__BUILD_DISCORD_CRASH_WEBHOOK_URL__'
+const BUILT_CRASH_WEBHOOK_URL = '__BUILD_DISCORD_CRASH_WEBHOOK_URL__'
 const MAX_CRASH_REPORT_CHARS = 500000
 const MAX_LOG_CHARS = 160000
 const MAX_PENDING_LOG_CHARS = 2000000
@@ -326,16 +326,42 @@ class Home {
         }
     }
 
-    buildCrashReport({ exitCode, baseDataPath, instanceName, instanceFolderName, authenticator, options, crashReportSnapshot }) {
+    isSessionNativeCrashReport(file, instancePaths, gamePid) {
+        // Fallback directories (including the system temp folder) can contain
+        // reports from unrelated Java apps. Their PID must match our process.
+        const filePid = Number(path.basename(file.filePath).match(/^hs_err_pid(\d+)\.log$/i)?.[1])
+        if (Number.isInteger(gamePid) && gamePid > 0) {
+            if (filePid !== gamePid) return false
+        } else if (!instancePaths.some(directory => path.resolve(directory) === path.dirname(path.resolve(file.filePath)))) {
+            return false
+        }
+        let fd
+        try {
+            fd = fs.openSync(file.filePath, 'r')
+            const buffer = Buffer.alloc(8192)
+            const length = fs.readSync(fd, buffer, 0, buffer.length, 0)
+            const header = buffer.toString('utf8', 0, length)
+            if (!/A fatal error has been detected by the Java Runtime Environment/i.test(header)) return false
+            const headerPid = header.match(/\bpid\s*=\s*(\d+)/i)
+            return !headerPid || Number(headerPid[1]) === filePid
+        } catch {
+            return false
+        } finally {
+            if (fd !== undefined) fs.closeSync(fd)
+        }
+    }
+
+    buildCrashReport({ exitCode, baseDataPath, instanceName, instanceFolderName, authenticator, options, crashReportSnapshot, gamePid }) {
         const instancePaths = this.getInstanceReportPaths(baseDataPath, instanceFolderName)
-        const newestCrashReport = this.getNewestChangedFileInPaths(
+        const newestCrashReport = exitCode === 0 ? null : this.getNewestChangedFileInPaths(
             instancePaths.map(instancePath => path.join(instancePath, 'crash-reports')),
             '.txt',
             crashReportSnapshot
         )
         const nativeReportPaths = this.getNativeCrashReportPaths(instancePaths, baseDataPath)
-        const newestNativeCrashReport = this.listNativeCrashReports(nativeReportPaths)
+        const newestNativeCrashReport = exitCode === 0 ? null : this.listNativeCrashReports(nativeReportPaths)
             .filter(file => this.hasFileChangedSinceSnapshot(file, crashReportSnapshot))
+            .filter(file => this.isSessionNativeCrashReport(file, instancePaths, gamePid))
             .sort((a, b) => b.mtimeMs - a.mtimeMs)[0]?.filePath || null
         const reportFiles = [
             { label: 'Crash natif Java', filePath: newestNativeCrashReport, native: true },
@@ -348,6 +374,7 @@ class Home {
             'The Fortress Of Thieves - rapport de crash',
             `Date: ${new Date().toISOString()}`,
             `Code de sortie: ${exitCode}`,
+            `PID Minecraft: ${gamePid || 'inconnu'}`,
             `Instance: ${instanceName}`,
             `Joueur: ${authenticator?.name || 'inconnu'}`,
             `Launcher: ${pkg.name} ${pkg.version}`,
@@ -378,7 +405,25 @@ class Home {
         }
     }
 
+    getCrashWebhookUrl() {
+        for (const candidate of [process.env.DISCORD_CRASH_WEBHOOK_URL, BUILT_CRASH_WEBHOOK_URL]) {
+            try {
+                const url = new URL(candidate)
+                if (url.protocol === 'https:' && ['discord.com', 'discordapp.com'].includes(url.hostname)
+                    && /^\/api\/webhooks\/[^/]+\/[^/]+\/?$/.test(url.pathname)
+                    && !url.username && !url.password) return url.href
+            } catch {
+                // Development may have no webhook, or a stale invalid override.
+            }
+        }
+        return null
+    }
+
     async sendCrashReportToWebhook(report, { exitCode, instanceName, playerName }) {
+        const webhookUrl = this.getCrashWebhookUrl()
+        if (!webhookUrl) {
+            throw new Error('L’envoi des rapports n’est pas configuré dans cette version du launcher. En développement, définissez DISCORD_CRASH_WEBHOOK_URL ; pour les joueurs, installez une version compilée avec cette configuration.')
+        }
         const safeInstanceName = String(instanceName || 'instance').replace(/[^a-z0-9._-]/gi, '_')
         const form = new FormData()
         form.append('payload_json', JSON.stringify({
@@ -391,7 +436,7 @@ class Home {
             contentType: 'text/plain'
         })
 
-        const response = await fetch(DISCORD_CRASH_WEBHOOK_URL, {
+        const response = await fetch(webhookUrl, {
             method: 'POST',
             body: form,
             headers: form.getHeaders()
@@ -404,10 +449,11 @@ class Home {
 
     showCrashReportPopup(crashReport, crashContext) {
         const crashPopup = new popup()
-        const canSendCrashReport = crashReport.hasCrashReport
+        const webhookConfigured = Boolean(this.getCrashWebhookUrl())
+        const canSendCrashReport = crashReport.hasCrashReport && webhookConfigured
         const content = canSendCrashReport
             ? `Le jeu s'est fermé d'une manière inattendue<br><br>Voulez-vous envoyer votre rapport de plantage ? Cela peut aider à corriger le soucis.`
-            : `Le jeu s'est fermé d'une manière inattendue`
+            : `Le jeu s'est fermé d'une manière inattendue${crashReport.hasCrashReport && !webhookConfigured ? '<br><br>L’envoi des rapports n’est pas configuré dans cette version du launcher.' : ''}`
 
         crashPopup.openPopup({
             title: 'Crash du jeu',
@@ -962,7 +1008,8 @@ class Home {
                 '-XX:+ZGenerational' // Ajouté pour la v3 de Distant Horizon
             ]
         }
-        const crashReportSnapshot = this.createCrashReportSnapshot(this.getInstanceReportPaths(baseDataPath, instanceFolderName), baseDataPath)
+        let crashReportSnapshot = this.createCrashReportSnapshot(this.getInstanceReportPaths(baseDataPath, instanceFolderName), baseDataPath)
+        let gamePid = null
         const instancePath = path.join(baseDataPath, 'instances', instanceFolderName)
         const gameLogCapture = this.createGameLogCapture(instancePath)
         let launchOutput = ''
@@ -1017,6 +1064,13 @@ class Home {
         });
 
         let hiddenAttributesAppliedAfterDownload = false
+        launch.on('game-process', ({ pid }) => {
+            gamePid = pid
+            // Exclude any reports produced by Java/Forge installation, before
+            // Minecraft itself started, from this game's crash detection.
+            crashReportSnapshot = this.createCrashReportSnapshot(this.getInstanceReportPaths(baseDataPath, instanceFolderName), baseDataPath)
+        })
+
         launch.on('data', (e) => {
             launchOutput = `${launchOutput}${String(e ?? '')}`.slice(-MAX_LOG_CHARS)
             try {
@@ -1060,6 +1114,9 @@ class Home {
             new logger(pkg.name, '#7289da');
             console.log('Close');
 
+            // Clicking the window's close button normally exits with status 0.
+            // Logs alone must never turn a successful exit into a crash popup.
+            if (code === 0) return
             await this.wait(750)
             const crashReport = this.buildCrashReport({
                 exitCode: code,
@@ -1068,7 +1125,8 @@ class Home {
                 instanceFolderName,
                 authenticator,
                 options,
-                crashReportSnapshot
+                crashReportSnapshot,
+                gamePid
             })
 
             if (this.isMissingRuntimeDependency({ message: launchOutput })) {
