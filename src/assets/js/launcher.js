@@ -86,6 +86,15 @@ class Launcher {
         })
     }
 
+    getDefaultJavaMemory() {
+        // Physical RAM is stable; free RAM varies with running applications.
+        const totalGiB = os.totalmem() / 1073741824
+        const max = !Number.isFinite(totalGiB) || totalGiB <= 0 ? 4
+            : totalGiB > 8 ? 6
+                : totalGiB > 4 ? 4 : Math.max(0.5, Math.floor(totalGiB) / 2)
+        return { min: Math.min(3, max), max }
+    }
+
     async initConfigClient() {
         console.log('Initializing Config Client...')
         let configClient = await this.db.readData('configClient')
@@ -96,10 +105,7 @@ class Launcher {
                 instance_selct: null,
                 java_config: {
                     java_path: null,
-                    java_memory: {
-                        min: 3,
-                        max: 8
-                    }
+                    java_memory: this.getDefaultJavaMemory()
                 },
                 game_config: {
                     screen_size: {

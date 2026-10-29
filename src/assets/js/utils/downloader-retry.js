@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { inflateRawSync } = require('zlib');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const { Downloader, Launch } = require('minecraft-java-core');
 const nodeFetch = require('node-fetch');
 const { Readable, Transform } = require('stream');
@@ -749,16 +749,49 @@ const findBundledJavaExecutable = (runtimeFolder) => {
     return null;
 };
 
+const probeJavaRuntime = (executable, expectedMajor) => new Promise(resolve => {
+    // JVM option overrides belong to the game, not this installation health
+    // check: a user's bad memory flags must not cause a healthy cache deletion.
+    const environment = { ...process.env };
+    for (const name of Object.keys(environment)) {
+        if (['_JAVA_OPTIONS', 'JAVA_TOOL_OPTIONS', 'JDK_JAVA_OPTIONS'].includes(name.toUpperCase())) {
+            delete environment[name];
+        }
+    }
+    const consoleJava = process.platform === 'win32' && /javaw\.exe$/i.test(executable)
+        ? path.join(path.dirname(executable), 'java.exe') : executable;
+    const finish = (error, stdout = '', stderr = '') => {
+        const output = `${stdout}\n${stderr}`;
+        if (error) {
+            return resolve({ valid: false, message: `Java ne démarre pas : ${(output.trim() || error.message).slice(0, 2000)}` });
+        }
+        const version = output.match(/(?:openjdk|java) version\s+"(?:1\.)?(\d+)(?:[.\-+"_])/i);
+        if (!version) return resolve({ valid: false, message: 'Java ne renvoie aucune version valide.' });
+        if (expectedMajor && Number(version[1]) !== Number(expectedMajor)) {
+            return resolve({ valid: false, message: `Java ${version[1]} détecté, mais Java ${expectedMajor} est requis.` });
+        }
+        resolve({ valid: true });
+    };
+    try {
+        execFile(consoleJava, ['-version'], {
+            windowsHide: true, timeout: 10000, maxBuffer: 65536, env: environment
+        }, finish);
+    } catch (error) {
+        finish(error);
+    }
+});
+
 const patchConfiguredJavaFallback = () => {
     if (Launch.prototype.__fortressPatchedConfiguredJavaFallback) return;
 
     const originalLaunch = Launch.prototype.Launch;
 
-    Launch.prototype.Launch = function patchedConfiguredJavaFallback(options) {
+    Launch.prototype.Launch = async function patchedConfiguredJavaFallback(options) {
         const configuredPath = options?.java?.path;
         if (!configuredPath) return originalLaunch.call(this, options);
 
-        const executable = resolveExistingJavaExecutable(configuredPath);
+        let executable = resolveExistingJavaExecutable(configuredPath);
+        if (executable && !(await probeJavaRuntime(executable, options.java.version)).valid) executable = null;
         const normalizedOptions = {
             ...options,
             java: {
@@ -768,7 +801,7 @@ const patchConfiguredJavaFallback = () => {
         };
 
         if (!executable) {
-            console.warn(`[Launcher] Le chemin Java configuré n'existe plus (${configuredPath}). Utilisation du runtime intégré.`);
+            console.warn(`[Launcher] Le Java configuré est absent ou inutilisable (${configuredPath}). Utilisation du runtime intégré.`);
         }
 
         return originalLaunch.call(this, normalizedOptions);
@@ -786,42 +819,46 @@ const patchJavaRuntimeExecutable = () => {
     if (JavaDownloader.prototype.__fortressPatchedJavaExecutable) return;
 
     const originalGetJavaOther = JavaDownloader.prototype.getJavaOther;
+    JavaDownloader.prototype.validateJavaRuntime = probeJavaRuntime;
 
     JavaDownloader.prototype.getJavaOther = async function patchedGetJavaOther(jsonVersion, versionDownload) {
+        const failure = message => ({ files: [], path: '', error: message, message });
         const majorVersion = versionDownload || jsonVersion?.javaVersion?.majorVersion || 8;
+        if (!/^[1-9]\d*$/.test(String(majorVersion))) {
+            return failure('Version majeure Java invalide.');
+        }
         const runtimeFolder = path.resolve(this.options.path, `runtime/jre-${majorVersion}`);
         const existingExecutable = findBundledJavaExecutable(runtimeFolder);
-
-        if (existingExecutable) return { files: [], path: existingExecutable };
-
         const runtimeRoot = path.resolve(this.options.path, 'runtime');
         const relativeRuntimePath = path.relative(runtimeRoot, runtimeFolder);
         const safeRuntimeFolder = relativeRuntimePath
             && !relativeRuntimePath.startsWith('..')
             && !path.isAbsolute(relativeRuntimePath);
         let lastError = null;
+        if (existingExecutable) {
+            const health = await this.validateJavaRuntime(existingExecutable, majorVersion);
+            if (health.valid) return { files: [], path: existingExecutable };
+            lastError = new Error(health.message);
+        }
+
+        const clearIncompleteRuntime = async () => {
+            if (!fs.existsSync(runtimeFolder)) return;
+            // Never follow a substituted jre-* link into another installation.
+            const root = await fs.promises.realpath(runtimeRoot);
+            const target = await fs.promises.realpath(runtimeFolder);
+            const relative = path.relative(root, target);
+            if (!safeRuntimeFolder || !relative || relative === '..' || relative.startsWith(`..${path.sep}`)
+                || path.isAbsolute(relative) || (await fs.promises.lstat(runtimeFolder)).isSymbolicLink()) {
+                throw new Error(`Le dossier du runtime Java n'est pas sûr : ${runtimeFolder}`);
+            }
+            await fs.promises.rm(runtimeFolder, { recursive: true, force: true });
+        };
 
         for (let attempt = 1; attempt <= 2; attempt += 1) {
-            if (attempt === 2) {
-                if (!safeRuntimeFolder) {
-                    return {
-                        files: [],
-                        path: '',
-                        error: true,
-                        message: `Le dossier du runtime Java n'est pas sûr : ${runtimeFolder}`
-                    };
-                }
-
-                try {
-                    fs.rmSync(runtimeFolder, { recursive: true, force: true });
-                } catch (cleanupError) {
-                    return {
-                        files: [],
-                        path: '',
-                        error: true,
-                        message: `Impossible de supprimer le runtime Java incomplet : ${cleanupError.message}`
-                    };
-                }
+            try {
+                await clearIncompleteRuntime();
+            } catch (cleanupError) {
+                return failure(`Impossible de réparer le runtime Java incomplet : ${cleanupError.message}`);
             }
 
             let result;
@@ -840,18 +877,18 @@ const patchJavaRuntimeExecutable = () => {
 
             const executable = resolveExistingJavaExecutable(result.path)
                 || findBundledJavaExecutable(runtimeFolder);
-            if (executable) return { ...result, path: executable };
-
-            lastError = new Error(`Aucun exécutable Java n'a été extrait dans ${runtimeFolder}.`);
+            if (executable) {
+                const health = await this.validateJavaRuntime(executable, majorVersion);
+                if (health.valid) return { ...result, path: executable };
+                lastError = new Error(health.message);
+            } else {
+                lastError = new Error(`Aucun exécutable Java n'a été extrait dans ${runtimeFolder}.`);
+            }
         }
 
-        return {
-            files: [],
-            path: '',
-            error: true,
-            message: `Le runtime Java ${majorVersion} reste incomplet après sa réinstallation. `
-                + `Vérifiez si l'antivirus a placé java.exe en quarantaine. ${lastError?.message || ''}`.trim()
-        };
+        return failure(`Le runtime Java ${majorVersion} reste incomplet après sa réinstallation. `
+                + `Vérifiez les droits d'accès et si l'antivirus a bloqué des fichiers Java. ${lastError?.message || ''}`.trim()
+        );
     };
 
     JavaDownloader.prototype.__fortressPatchedJavaExecutable = true;

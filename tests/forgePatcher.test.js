@@ -36,6 +36,10 @@ test('réutilise le véritable exécutable du runtime Java déjà extrait', asyn
         path: temporaryPath,
         java: { version: 21, type: 'jre' }
     })
+    java.validateJavaRuntime = async executable => {
+        assert.equal(executable, executablePath)
+        return { valid: true }
+    }
     const result = await java.getJavaOther({ javaVersion: { majorVersion: 21 } }, 21)
 
     assert.equal(path.resolve(result.path), path.resolve(executablePath))
@@ -61,7 +65,7 @@ test('supprime et reconstruit automatiquement un runtime Java extrait sans exéc
     JavaDownloader.prototype.__fortressOriginalGetJavaOther = async function simulatedJavaExtraction() {
         attempts += 1
         if (attempts === 1) {
-            assert.equal(fs.existsSync(staleArchive), true)
+            assert.equal(fs.existsSync(staleArchive), false)
             return { files: [], path: path.join(runtimeFolder, 'runtime-corrompu', 'bin', 'java') }
         }
 
@@ -76,6 +80,7 @@ test('supprime et reconstruit automatiquement un runtime Java extrait sans exéc
         path: temporaryPath,
         java: { version: 21, type: 'jre' }
     })
+    java.validateJavaRuntime = async () => ({ valid: true })
     const result = await java.getJavaOther({ javaVersion: { majorVersion: 21 } }, 21)
 
     assert.equal(attempts, 2)
