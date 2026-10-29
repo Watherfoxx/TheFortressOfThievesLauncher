@@ -102,7 +102,7 @@ class Index {
                 extraMetadata: { main: 'app/app.js' },
                 files: ["app/**/*", "package.json", "LICENSE.md"],
                 directories: { "output": "dist" },
-                compression: 'maximum',
+                compression: 'normal',
                 asar: true,
                 publish: [{
                     provider: "github",
@@ -130,16 +130,9 @@ class Index {
                     },
                     target: [{
                         target: "dmg",
-                        arch: "x64"
-                    },
-                    {
-                        target: "zip",
-                        arch: "x64"
-                    },
-                    {
-                        target: "dmg",
                         arch: "arm64"
                     }, {
+                        // Required for latest-mac.yml, even though users install the DMG.
                         target: "zip",
                         arch: "arm64"
                     }]
@@ -178,7 +171,7 @@ class Index {
     verifyUpdateMetadata() {
         const metadataByPlatform = {
             win32: { file: 'latest.yml', artifact: /\.exe\b/i },
-            darwin: { file: 'latest-mac.yml', artifact: /\.zip\b/i },
+            darwin: { file: 'latest-mac.yml', artifact: /-arm64\.zip\b/i },
             linux: { file: 'latest-linux.yml', artifact: /\.AppImage\b/i }
         }
         const expected = metadataByPlatform[process.platform]
