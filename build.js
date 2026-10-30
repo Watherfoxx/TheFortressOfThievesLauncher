@@ -90,7 +90,17 @@ class Index {
         }
     }
 
+    getMacBuildArchitectures() {
+        const architecture = process.env.MAC_BUILD_ARCH
+        if (!architecture) return ['arm64', 'x64']
+        if (!['arm64', 'x64'].includes(architecture)) {
+            throw new Error(`Architecture macOS invalide : ${architecture}`)
+        }
+        return [architecture]
+    }
+
     async buildPlatform() {
+        const macArchitectures = this.getMacBuildArchitectures()
         await this.Obfuscate();
         const buildOptions = {
             config: {
@@ -128,14 +138,12 @@ class Index {
                     extendInfo: {
                         NSMicrophoneUsageDescription: "Le chat vocal en jeu nécessite l'accès au microphone."
                     },
-                    target: [{
-                        target: "dmg",
-                        arch: "arm64"
-                    }, {
-                        // Required for latest-mac.yml, even though users install the DMG.
-                        target: "zip",
-                        arch: "arm64"
-                    }]
+                    // Each CI job builds one architecture. ZIP remains required
+                    // for latest-mac.yml, even though users install the DMG.
+                    target: macArchitectures.flatMap(arch => [
+                        { target: 'dmg', arch },
+                        { target: 'zip', arch }
+                    ])
                 },
                 linux: {
                     icon: "./app/assets/images/icon.png",
@@ -171,7 +179,7 @@ class Index {
     verifyUpdateMetadata() {
         const metadataByPlatform = {
             win32: { file: 'latest.yml', artifact: /\.exe\b/i },
-            darwin: { file: 'latest-mac.yml', artifact: /-arm64\.zip\b/i },
+            darwin: { file: 'latest-mac.yml', artifact: /-(?:arm64|x64)\.zip\b/i },
             linux: { file: 'latest-linux.yml', artifact: /\.AppImage\b/i }
         }
         const expected = metadataByPlatform[process.platform]
@@ -189,6 +197,13 @@ class Index {
         }
         if (!/^\s*sha512:\s*\S+/m.test(metadata) || !expected.artifact.test(metadata)) {
             throw new Error(`${expected.file} est incomplet ou ne référence pas le bon artefact`)
+        }
+        if (process.platform === 'darwin') {
+            for (const arch of this.getMacBuildArchitectures()) {
+                if (!new RegExp(`-${arch}\\.zip\\b`, 'i').test(metadata)) {
+                    throw new Error(`${expected.file} ne référence pas le bon artefact ZIP ${arch}`)
+                }
+            }
         }
 
         console.log(`Métadonnées de mise à jour vérifiées: ${metadataPath}`)

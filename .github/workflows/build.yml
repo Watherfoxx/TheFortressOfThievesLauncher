@@ -33,14 +33,27 @@ jobs:
           prerelease: ${{ contains(steps.version.outputs.value, 'beta') || contains(steps.version.outputs.value, 'alpha') }}
 
   build-launcher:
+    name: Build ${{ matrix.platform }} ${{ matrix.arch }}
     needs: create_release
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # macOS produit uniquement le DMG ARM64 et son ZIP de mise à jour.
-        # On conserve le runner Intel déjà validé pour la génération des DMG.
-        os: [macos-15-intel, ubuntu-latest, windows-latest]
+        # Chaque architecture Mac est construite dans un job indépendant.
+        # Le runner Intel est déjà validé pour les DMG Intel et Apple Silicon.
+        include:
+          - os: macos-15-intel
+            platform: mac
+            arch: arm64
+          - os: macos-15-intel
+            platform: mac
+            arch: x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: windows-latest
+            platform: windows
+            arch: x64
 
     steps:
       - name: Check out Git repository
@@ -64,13 +77,19 @@ jobs:
         env:
           DISCORD_CRASH_WEBHOOK_URL: ${{ secrets.DISCORD_CRASH_WEBHOOK_URL }}
           ELECTRON_BUILDER_PUBLISH: never
+          MAC_BUILD_ARCH: ${{ matrix.arch }}
         run: npm run build
+        shell: bash
+
+      - name: Isolate macOS update metadata
+        if: matrix.platform == 'mac'
+        run: mv dist/latest-mac.yml "dist/latest-mac-${{ matrix.arch }}.yml"
         shell: bash
 
       - name: Store release files
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ runner.os }}
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             dist/latest*.yml
             dist/*.exe
@@ -89,12 +108,28 @@ jobs:
     needs: [create_release, build-launcher]
     runs-on: ubuntu-latest
     steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install release tooling dependencies
+        # No Electron download or native SQLite rebuild is needed to merge YAML.
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Download platform release files
         uses: actions/download-artifact@v4
         with:
           pattern: release-*
           path: dist
           merge-multiple: true
+
+      - name: Merge macOS update metadata
+        run: node scripts/merge-mac-update-metadata.js dist
 
       - name: Normalize release filenames
         run: |

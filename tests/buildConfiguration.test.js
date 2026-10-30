@@ -8,7 +8,7 @@ const pkg = require('../package.json')
 const source = fs.readFileSync(path.join(__dirname, '../build.js'), 'utf8')
     .replace(/new Index\(\)\.init\(\)\.catch\([\s\S]*$/, 'globalThis.Build = Index;')
 
-function setup(platform = 'darwin', metadata = '') {
+function setup(platform = 'darwin', metadata = '', architecture = 'arm64') {
     const builds = []
     const context = vm.createContext({
         require: name => {
@@ -17,7 +17,7 @@ function setup(platform = 'darwin', metadata = '') {
             if (name === 'fs') return { existsSync: () => true, readFileSync: () => metadata }
             return {}
         },
-        process: { platform, env: { ELECTRON_BUILDER_PUBLISH: 'never' } },
+        process: { platform, env: { ELECTRON_BUILDER_PUBLISH: 'never', MAC_BUILD_ARCH: architecture } },
         console: { log() {}, error() {} }
     })
     vm.runInContext(source, context)
@@ -68,4 +68,31 @@ test('les métadonnées Windows et Linux restent compatibles', () => {
 test('la validation de version des métadonnées est conservée', () => {
     const { build } = setup('darwin', updateMetadata('The-Fortress-Of-Thieves-mac-arm64.zip', '0.0.0'))
     assert.throws(() => build.verifyUpdateMetadata(), /ne référence pas la version/)
+})
+
+test('le job Intel ne construit que les DMG et ZIP x64', async () => {
+    const { build, builds } = setup('darwin', updateMetadata('The-Fortress-Of-Thieves-mac-x64.zip'), 'x64')
+    await build.buildPlatform()
+    assert.deepEqual(JSON.parse(JSON.stringify(builds[0].config.mac.target)), [
+        { target: 'dmg', arch: 'x64' }, { target: 'zip', arch: 'x64' }
+    ])
+    assert.equal(builds[0].config.compression, 'normal')
+})
+
+test('hors CI, le build Mac peut encore produire les deux architectures', async () => {
+    const metadata = updateMetadata('The-Fortress-Of-Thieves-mac-arm64.zip')
+        .replace('path:', '  - url: The-Fortress-Of-Thieves-mac-x64.zip\n    sha512: fixture-x64\n    size: 456\npath:')
+    // Passing null means no architecture override in this fixture.
+    const local = setup('darwin', metadata, null)
+    await local.build.buildPlatform()
+    assert.deepEqual(JSON.parse(JSON.stringify(local.builds[0].config.mac.target)), [
+        { target: 'dmg', arch: 'arm64' }, { target: 'zip', arch: 'arm64' },
+        { target: 'dmg', arch: 'x64' }, { target: 'zip', arch: 'x64' }
+    ])
+})
+
+test('une architecture invalide arrête le build avant toute génération', async () => {
+    const { build, builds } = setup('darwin', '', 'typo')
+    await assert.rejects(build.buildPlatform(), /Architecture macOS invalide/)
+    assert.equal(builds.length, 0)
 })
